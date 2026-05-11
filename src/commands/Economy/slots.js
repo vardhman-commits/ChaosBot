@@ -1,8 +1,8 @@
 import { SlashCommandBuilder, EmbedBuilder } from 'discord.js';
 import { logger } from '../../utils/logger.js';
 import { InteractionHelper } from '../../utils/interactionHelper.js';
-// TODO: Adjust these imports to match your actual economy service functions
-import { getBalance, removeBalance, addBalance } from '../../services/economyService.js'; 
+// Corrected imports to match your economy system
+import { getEconomyData, removeMoney, addMoney } from '../../services/economy.js'; 
 
 const SLOTS = ['🍒', '🍋', '🍉', '🍇', '🔔', '💎', '🎰'];
 const MULTIPLIERS = {
@@ -27,14 +27,16 @@ export default {
         const userId = interaction.user.id;
         const guildId = interaction.guildId;
 
-        // 1. Check Balance
-        const currentBalance = await getBalance(client, guildId, userId);
+        // 1. Check Balance using your bot's economy data
+        const userData = await getEconomyData(client, guildId, userId);
+        const currentBalance = userData.wallet || 0;
+        
         if (currentBalance < bet) {
-            return InteractionHelper.safeEditReply(interaction, { content: `❌ You don't have enough coins! Your balance is **${currentBalance}**.` });
+            return InteractionHelper.safeEditReply(interaction, { content: `❌ You don't have enough cash! Your wallet balance is **$${currentBalance.toLocaleString()}**.` });
         }
 
         // Deduct bet initially
-        await removeBalance(client, guildId, userId, bet);
+        await removeMoney(client, guildId, userId, bet);
 
         // 2. Generate Slot Grid
         const grid = Array.from({ length: 3 }, () => 
@@ -48,7 +50,7 @@ export default {
         let winnings = 0;
         if (isWin) {
             winnings = bet * MULTIPLIERS[winningSymbol];
-            await addBalance(client, guildId, userId, winnings);
+            await addMoney(client, guildId, userId, winnings);
         }
 
         // 3. Visual UI
@@ -62,7 +64,7 @@ export default {
         const embed = new EmbedBuilder()
             .setTitle('🎰 Slot Machine 🎰')
             .setColor(isWin ? '#2ecc71' : '#e74c3c')
-            .setDescription(`${slotUI}\n\n**Bet:** 🪙 ${bet}\n**Result:** ${isWin ? `🎉 YOU WON **🪙 ${winnings}**!` : '❌ You lost.'}`)
+            .setDescription(`${slotUI}\n\n**Bet:** $${bet.toLocaleString()}\n**Result:** ${isWin ? `🎉 YOU WON **$${winnings.toLocaleString()}**!` : '❌ You lost.'}`)
             .setFooter({ text: `${interaction.user.username}'s game` });
 
         await InteractionHelper.safeEditReply(interaction, { embeds: [embed] });
