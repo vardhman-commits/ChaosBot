@@ -122,11 +122,15 @@ export default {
                 if (i.customId === hitId) {
                     playerHand.push(deck.pop());
                     if (calculateScore(playerHand) > 21) {
+                        // FIX: Acknowledge the hit that busted you
+                        await i.deferUpdate(); 
                         collector.stop('bust');
                     } else {
                         await i.update({ embeds: [generateEmbed()], components: [row] });
                     }
                 } else if (i.customId === standId) {
+                    // FIX: Acknowledge the stand button click!
+                    await i.deferUpdate(); 
                     collector.stop('stand');
                 }
             });
