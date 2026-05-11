@@ -1,14 +1,12 @@
-import { SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, ModalBuilder, TextInputBuilder, TextInputStyle, ComponentType, AttachmentBuilder } from 'discord.js';
+import { SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, ModalBuilder, TextInputBuilder, TextInputStyle, ComponentType } from 'discord.js';
 import { logger } from '../../utils/logger.js';
 import EconomyService from '../../services/economyService.js';
 import { getEconomyData } from '../../utils/economy.js';
-import fs from 'fs';
-import path from 'path';
 
 const RED_NUMBERS = [1, 3, 5, 7, 9, 12, 14, 16, 18, 19, 21, 23, 25, 27, 30, 32, 34, 36];
 const activeRouletteServers = new Set();
 
-// Global memory for spin history
+// Global memory for spin history (Allows /roulettestats to read it)
 export const globalSpinHistory = new Map();
 
 export default {
@@ -25,6 +23,7 @@ export default {
 
         activeRouletteServers.add(interaction.guildId);
         
+        // Initialize an empty history array for this server if it doesn't exist yet
         if (!globalSpinHistory.has(interaction.guildId)) {
             globalSpinHistory.set(interaction.guildId, []);
         }
@@ -44,29 +43,38 @@ function formatHistory(history) {
 }
 
 async function runRouletteLoop(channel, client, guildId) {
-    // Generate absolute paths so it works perfectly in Docker/Linux/Windows
-    const tableImgPath = path.join(process.cwd(), 'src', 'assets', 'table.jpg');
-    const wheelImgPath = path.join(process.cwd(), 'src', 'assets', 'wheel.gif');
-
     while (activeRouletteServers.has(guildId)) {
         try {
             let currentBets = [];
             let spinHistory = globalSpinHistory.get(guildId);
 
-            // Safely check if files exist to prevent silent crashing loops
-            const hasTableImg = fs.existsSync(tableImgPath);
-            const hasWheelImg = fs.existsSync(wheelImgPath);
-
             // ==========================================
             // PHASE 1: BETTING OPEN
             // ==========================================
-            
+            const tableArt = `
+🟢 **0**
+🔴 **1** ┃ ⚫ **2** ┃ 🔴 **3** | *1st 12*
+⚫ **4** ┃ 🔴 **5** ┃ ⚫ **6** |
+🔴 **7** ┃ ⚫ **8** ┃ 🔴 **9** |
+⚫ **10**┃ ⚫ **11**┃ 🔴 **12** |
+⚫ **13**┃ 🔴 **14**┃ ⚫ **15** | *2nd 12*
+🔴 **16**┃ ⚫ **17**┃ 🔴 **18** |
+🔴 **19**┃ ⚫ **20**┃ 🔴 **21** |
+⚫ **22**┃ 🔴 **23**┃ ⚫ **24** |
+🔴 **25**┃ ⚫ **26**┃ 🔴 **27** | *3rd 12*
+⚫ **28**┃ ⚫ **29**┃ 🔴 **30** |
+⚫ **31**┃ 🔴 **32**┃ ⚫ **33** |
+🔴 **34**┃ ⚫ **35**┃ 🔴 **36** |
+*Col1* *Col2* *Col3*
+            `;
+
             const betEmbed = new EmbedBuilder()
                 .setTitle('🎰 LIVE DEALER ROULETTE 🎰')
                 .setColor('#2ecc71')
                 .setDescription(`**Betting is OPEN!** You have **1 Minute** to place your bets.\nClick the button below to play.`)
                 .addFields(
                     { name: '🔄 Recent Spins', value: formatHistory(spinHistory), inline: false },
+                    { name: 'Roulette Board', value: tableArt, inline: false },
                     { name: '🔴 Red / ⚫ Black', value: 'Payout: **1:1**', inline: true },
                     { name: '🔵 Even / 🟡 Odd', value: 'Payout: **1:1**', inline: true },
                     { name: '⬇️ Low(1-18) / ⬆️ High(19-36)', value: 'Payout: **1:1**', inline: true },
@@ -76,22 +84,11 @@ async function runRouletteLoop(channel, client, guildId) {
                 )
                 .setFooter({ text: `The Dealer is waiting for bets... • Total Server Spins: ${spinHistory.length}` });
 
-            // Only attach image if it actually exists
-            if (hasTableImg) {
-                betEmbed.setImage('attachment://table.jpg');
-            }
-
             const betButton = new ActionRowBuilder().addComponents(
                 new ButtonBuilder().setCustomId('place_bet').setLabel('💰 Place Your Bet').setStyle(ButtonStyle.Success)
             );
 
-            const sendOptions = { embeds: [betEmbed], components: [betButton] };
-            if (hasTableImg) {
-                sendOptions.files = [new AttachmentBuilder(tableImgPath)];
-            }
-
-            // Send the message
-            const gameMessage = await channel.send(sendOptions);
+            const gameMessage = await channel.send({ embeds: [betEmbed], components: [betButton] });
             const collector = gameMessage.createMessageComponentCollector({ componentType: ComponentType.Button, time: 60000 });
 
             collector.on('collect', async (i) => {
@@ -148,21 +145,12 @@ async function runRouletteLoop(channel, client, guildId) {
             // PHASE 2: SPINNING
             // ==========================================
             betButton.components[0].setDisabled(true);
-
             const spinningEmbed = new EmbedBuilder()
                 .setTitle('🎰 ROULETTE SPINNING... 🎰')
                 .setColor('#f1c40f')
                 .setDescription(`**NO MORE BETS!**\n\nThe Dealer is spinning the wheel...\nTotal Bets Placed: **${currentBets.length}**`);
 
-            const spinOptions = { embeds: [spinningEmbed], components: [betButton], attachments: [] };
-            
-            if (hasWheelImg) {
-                spinningEmbed.setImage('attachment://wheel.gif');
-                spinOptions.files = [new AttachmentBuilder(wheelImgPath)];
-            }
-
-            await gameMessage.edit(spinOptions);
-            
+            await gameMessage.edit({ embeds: [spinningEmbed], components: [betButton] });
             await new Promise(resolve => setTimeout(resolve, 8000));
 
             // ==========================================
@@ -174,6 +162,7 @@ async function runRouletteLoop(channel, client, guildId) {
             const isEven = winningNumber !== 0 && winningNumber % 2 === 0;
             const isOdd = winningNumber !== 0 && winningNumber % 2 !== 0;
 
+            // Save to global history (Keep max 500 spins to prevent memory leaks)
             spinHistory.push(winningNumber);
             if (spinHistory.length > 500) spinHistory.shift();
 
@@ -195,15 +184,17 @@ async function runRouletteLoop(channel, client, guildId) {
                 else if (bet.type === '1-18' && winningNumber >= 1 && winningNumber <= 18) { won = true; multiplier = 2; }
                 else if (bet.type === '19-36' && winningNumber >= 19 && winningNumber <= 36) { won = true; multiplier = 2; }
                 
-                // 2:1 Bets
+                // 2:1 Bets (Dozens)
                 else if (bet.type === '1-12' && winningNumber >= 1 && winningNumber <= 12) { won = true; multiplier = 3; }
                 else if (bet.type === '13-24' && winningNumber >= 13 && winningNumber <= 24) { won = true; multiplier = 3; }
                 else if (bet.type === '25-36' && winningNumber >= 25 && winningNumber <= 36) { won = true; multiplier = 3; }
+                
+                // 2:1 Bets (Columns)
                 else if (bet.type === 'col1' && winningNumber !== 0 && winningNumber % 3 === 1) { won = true; multiplier = 3; }
                 else if (bet.type === 'col2' && winningNumber !== 0 && winningNumber % 3 === 2) { won = true; multiplier = 3; }
                 else if (bet.type === 'col3' && winningNumber !== 0 && winningNumber % 3 === 0) { won = true; multiplier = 3; }
                 
-                // 35:1 Bets
+                // 35:1 Bets (Straight Up)
                 else if (parseInt(bet.type) === winningNumber) { won = true; multiplier = 36; }
 
                 if (won) {
@@ -222,9 +213,7 @@ async function runRouletteLoop(channel, client, guildId) {
                 .setColor(isRed ? '#e74c3c' : (isBlack ? '#2c3e50' : '#2ecc71'))
                 .setDescription(resultsText);
 
-            // Clear the files completely
-            await gameMessage.edit({ embeds: [resultEmbed], components: [], files: [], attachments: [] });
-            
+            await gameMessage.edit({ embeds: [resultEmbed], components: [] });
             await new Promise(resolve => setTimeout(resolve, 20000));
             await gameMessage.delete().catch(() => null);
 
