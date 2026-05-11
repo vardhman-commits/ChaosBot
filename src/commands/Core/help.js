@@ -1,14 +1,11 @@
 import {
     SlashCommandBuilder,
     ActionRowBuilder,
-    ButtonBuilder,
-    ButtonStyle,
+    PermissionFlagsBits
 } from "discord.js";
 import { InteractionHelper } from '../../utils/interactionHelper.js';
 import { createEmbed } from "../../utils/embeds.js";
-import {
-    createSelectMenu,
-} from "../../utils/components.js";
+import { createSelectMenu } from "../../utils/components.js";
 import fs from "fs/promises";
 import path from "path";
 import { fileURLToPath } from "url";
@@ -20,152 +17,88 @@ const CATEGORY_SELECT_ID = "help-category-select";
 const ALL_COMMANDS_ID = "help-all-commands";
 const HELP_MENU_TIMEOUT_MS = 5 * 60 * 1000;
 
-const CATEGORY_ICONS = {
-    Core: "ℹ️",
-    Moderation: "🛡️",
-    Economy: "💰",
-    Fun: "🎮",
-    Leveling: "📊",
-    Utility: "🔧",
-    Ticket: "🎫",
-    Welcome: "👋",
-    Giveaway: "🎉",
-    Counter: "🔢",
-    Tools: "🛠️",
-    Search: "🔍",
-    Reaction_Roles: "🎭",
-    Community: "👥",
-    Birthday: "🎂",
-    Config: "⚙️",
+// Centralized category data. Set adminOnly: true to hide from normal players!
+const CATEGORY_DATA = {
+    Core: { icon: "ℹ️", desc: "Essential bot commands and info", adminOnly: false },
+    Moderation: { icon: "🛡️", desc: "Server moderation and user management", adminOnly: true },
+    Economy: { icon: "💰", desc: "Currency system, shops, and gambling", adminOnly: false },
+    Fun: { icon: "🎮", desc: "Games, entertainment, and interactions", adminOnly: false },
+    Leveling: { icon: "📊", desc: "User levels, XP, and progression", adminOnly: false },
+    Utility: { icon: "🔧", desc: "Useful tools and server utilities", adminOnly: false },
+    Ticket: { icon: "🎫", desc: "Support ticket system", adminOnly: false },
+    Welcome: { icon: "👋", desc: "Member welcome messages", adminOnly: true },
+    Giveaway: { icon: "🎉", desc: "Giveaway management", adminOnly: true },
+    Counter: { icon: "🔢", desc: "Live counter channels", adminOnly: true },
+    Tools: { icon: "🛠️", desc: "Advanced server tools", adminOnly: false },
+    Search: { icon: "🔍", desc: "Search the web or discord", adminOnly: false },
+    Reaction_Roles: { icon: "🎭", desc: "Self-assignable role menus", adminOnly: true },
+    Community: { icon: "👥", desc: "Community tools and engagement", adminOnly: false },
+    Birthday: { icon: "🎂", desc: "Birthday tracking and celebrations", adminOnly: false },
+    Config: { icon: "⚙️", desc: "Server and bot configuration", adminOnly: true },
 };
 
-export async function createInitialHelpMenu(client) {
+export async function createInitialHelpMenu(client, member) {
     const commandsPath = path.join(__dirname, "../../commands");
-    const categoryDirs = (
-        await fs.readdir(commandsPath, { withFileTypes: true })
-    )
+    
+    // Check if the user is an Admin or Server Manager
+    const isAdmin = member.permissions.has(PermissionFlagsBits.Administrator) || 
+                    member.permissions.has(PermissionFlagsBits.ManageGuild);
+
+    // Read directories
+    const allDirs = (await fs.readdir(commandsPath, { withFileTypes: true }))
         .filter((dirent) => dirent.isDirectory())
         .map((dirent) => dirent.name)
         .sort();
 
+    // Filter categories based on permissions
+    const visibleCategories = allDirs.filter((category) => {
+        const categoryName = category.charAt(0).toUpperCase() + category.slice(1).toLowerCase();
+        const data = CATEGORY_DATA[categoryName];
+        
+        // If the category is marked adminOnly and the user IS NOT an admin, hide it.
+        if (data?.adminOnly && !isAdmin) return false;
+        return true;
+    });
+
+    const botName = client?.user?.username || "Bot";
+    const embed = createEmbed({ 
+        title: `🤖 ${botName} Help Center`,
+        description: "Select a category below to explore available commands.",
+        color: 'primary'
+    });
+
+    // Dynamically build the embed fields based on what the user is allowed to see
+    visibleCategories.forEach(category => {
+        const categoryName = category.charAt(0).toUpperCase() + category.slice(1).toLowerCase();
+        const data = CATEGORY_DATA[categoryName] || { icon: "📁", desc: "Miscellaneous commands" };
+        
+        embed.addFields({
+            name: `${data.icon} **${categoryName}**`,
+            value: data.desc,
+            inline: true
+        });
+    });
+
+    embed.setFooter({ text: "Made For Community" });
+    embed.setTimestamp();
+
+    // Dynamically build the dropdown menu
     const options = [
         {
             label: "📋 All Commands",
             description: "View all available commands with pagination",
             value: ALL_COMMANDS_ID,
         },
-        ...categoryDirs.map((category) => {
-            const categoryName =
-                category.charAt(0).toUpperCase() +
-                category.slice(1).toLowerCase();
-            const icon = CATEGORY_ICONS[categoryName] || "🔍";
+        ...visibleCategories.map((category) => {
+            const categoryName = category.charAt(0).toUpperCase() + category.slice(1).toLowerCase();
+            const data = CATEGORY_DATA[categoryName] || { icon: "📁" };
             return {
-                label: `${icon} ${categoryName}`,
+                label: `${data.icon} ${categoryName}`,
                 description: `View commands in the ${categoryName} category`,
                 value: category,
             };
         }),
     ];
-
-    const botName = client?.user?.username || "Bot";
-    const embed = createEmbed({ 
-        title: `🤖 ${botName} Help Center`,
-        description: "Your all-in-one Discord companion for moderation, economy, fun, and server management.",
-        color: 'primary'
-    });
-
-    embed.addFields(
-        {
-            name: "🛡️ **Moderation**",
-            value: "Server moderation, user management, and enforcement tools",
-            inline: true
-        },
-        {
-            name: "💰 **Economy**",
-            value: "Currency system, shops, and virtual economy",
-            inline: true
-        },
-        {
-            name: "🎮 **Fun**",
-            value: "Games, entertainment, and interactive commands",
-            inline: true
-        },
-        {
-            name: "📊 **Leveling**",
-            value: "User levels, XP system, and progression tracking",
-            inline: true
-        },
-        {
-            name: "🎫 **Tickets**",
-            value: "Support ticket system for server management",
-            inline: true
-        },
-        {
-            name: "🎉 **Giveaways**",
-            value: "Automated giveaway management and distribution",
-            inline: true
-        },
-        {
-            name: "👋 **Welcome**",
-            value: "Member welcome messages and onboarding",
-            inline: true
-        },
-        {
-            name: "🎂 **Birthdays**",
-            value: "Birthday tracking and celebration features",
-            inline: true
-        },
-        {
-            name: "👥 **Community**",
-            value: "Community tools, applications, and member engagement",
-            inline: true
-        },
-        {
-            name: "⚙️ **Config**",
-            value: "Server and bot configuration management commands",
-            inline: true
-        },
-        {
-            name: "🔢 **Counter**",
-            value: "Live counter channel setup and counter controls",
-            inline: true
-        },
-        {
-            name: "🎙️ **Join to Create**",
-            value: "Dynamic voice channel creation and management",
-            inline: true
-        },
-        {
-            name: "🎭 **Reaction Roles**",
-            value: "Self-assignable roles using reaction-role systems",
-            inline: true
-        },
-        {
-            name: "✅ **Verification**",
-            value: "Member verification workflows and access gating",
-            inline: true
-        },
-        {
-            name: "🔧 **Utilities**",
-            value: "Useful tools and server utilities",
-            inline: true
-        }
-    );
-
-    embed.setFooter({ 
-        text: "Made For Community" 
-    });
-    embed.setTimestamp();
-
-    const supportButton = new ButtonBuilder()
-        .setLabel("Support Server")
-        .setURL("https://discord.gg/chaoticclub")
-        .setStyle(ButtonStyle.Link);
-
-    const touchpointButton = new ButtonBuilder()
-        .setLabel("Support on Youtube")
-        .setURL("https://www.youtube.com/")
-        .setStyle(ButtonStyle.Link);
 
     const selectRow = createSelectMenu(
         CATEGORY_SELECT_ID,
@@ -173,39 +106,36 @@ export async function createInitialHelpMenu(client) {
         options,
     );
 
-    const buttonRow = new ActionRowBuilder().addComponents([
-        supportButton,
-        touchpointButton,
-    ]);
-
+    // Buttons are removed. Returning only the dropdown menu.
     return {
         embeds: [embed],
-        components: [buttonRow, selectRow],
+        components: [selectRow],
     };
 }
 
 export default {
     data: new SlashCommandBuilder()
         .setName("help")
-        .setDescription("Displays the help menu with all available commands"),
+        .setDescription("Displays the help menu with available commands"),
 
     async execute(interaction, guildConfig, client) {
         
-        const { MessageFlags } = await import('discord.js');
         await InteractionHelper.safeDefer(interaction);
         
-        const { embeds, components } = await createInitialHelpMenu(client);
+        // Pass the interaction.member so the menu knows if they are an Admin!
+        const { embeds, components } = await createInitialHelpMenu(client, interaction.member);
 
         await InteractionHelper.safeEditReply(interaction, {
             embeds,
             components,
         });
 
+        // Time out the menu after 5 minutes to prevent old interactions from crashing
         setTimeout(async () => {
             try {
                 const closedEmbed = createEmbed({
                     title: "Help menu closed",
-                    description: "Help menu has been closed, use /help again.",
+                    description: "Help menu has been closed due to inactivity. Use `/help` again.",
                     color: "secondary",
                 });
 
@@ -214,7 +144,7 @@ export default {
                     components: [],
                 });
             } catch (error) {
-                
+                // Ignore errors if the message was already deleted
             }
         }, HELP_MENU_TIMEOUT_MS);
     },
