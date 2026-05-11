@@ -1,98 +1,77 @@
-import { SlashCommandBuilder } from 'discord.js';
-import { createEmbed, errorEmbed, successEmbed, infoEmbed, warningEmbed } from '../../utils/embeds.js';
-import { getEconomyData, setEconomyData } from '../../utils/economy.js';
-import { withErrorHandling, createError, ErrorTypes } from '../../utils/errorHandler.js';
-import { MessageTemplates } from '../../utils/messageTemplates.js';
+import { SlashCommandBuilder, EmbedBuilder } from 'discord.js';
 import { InteractionHelper } from '../../utils/interactionHelper.js';
+import { getEconomyData, setEconomyData } from '../../utils/economy.js';
+import EconomyService from '../../services/economyService.js';
 
-const MINE_COOLDOWN = 60 * 60 * 1000;
-const BASE_MIN_REWARD = 400;
-const BASE_MAX_REWARD = 1200;
-const PICKAXE_MULTIPLIER = 1.2;
-const DIAMOND_PICKAXE_MULTIPLIER = 2.0;
+const COOLDOWN = 15 * 60 * 1000; // 15 Minutes
 
-const MINE_LOCATIONS = [
-    "abandoned gold mine",
-    "dark, damp cave",
-    "backyard rock quarry",
-    "volcanic obsidian vent",
-    "deep-sea mineral trench",
+const ORES = [
+    { name: 'Coal', value: 100, icon: '🪨' },
+    { name: 'Iron', value: 250, icon: '🪙' },
+    { name: 'Gold', value: 500, icon: '💰' },
+    { name: 'Uranium', value: 800, icon: '☢️' }
 ];
 
 export default {
     data: new SlashCommandBuilder()
         .setName('mine')
-        .setDescription('Go mining to earn money'),
+        .setDescription('Venture into the caves to mine some valuable ores!'),
+    category: 'Economy',
 
-    execute: withErrorHandling(async (interaction, config, client) => {
-        const deferred = await InteractionHelper.safeDefer(interaction);
-        if (!deferred) return;
-            
-            const userId = interaction.user.id;
-            const guildId = interaction.guildId;
-            const now = Date.now();
+    async execute(interaction, config, client) {
+        await InteractionHelper.safeDefer(interaction);
+        const userId = interaction.user.id;
+        const guildId = interaction.guildId;
+        const now = Date.now();
 
-            const userData = await getEconomyData(client, guildId, userId);
-            const lastMine = userData.lastMine || 0;
-            const hasDiamondPickaxe = userData.inventory["diamond_pickaxe"] || 0;
-            const hasPickaxe = userData.inventory["pickaxe"] || 0;
+        const userData = await getEconomyData(client, guildId, userId);
+        const lastMine = userData.lastMine || 0;
 
-            if (now < lastMine + MINE_COOLDOWN) {
-                const remaining = lastMine + MINE_COOLDOWN - now;
-                const hours = Math.floor(remaining / (1000 * 60 * 60));
-                const minutes = Math.floor(
-                    (remaining % (1000 * 60 * 60)) / (1000 * 60),
-                );
+        if (now < lastMine + COOLDOWN) {
+            const remaining = lastMine + COOLDOWN - now;
+            const minutes = Math.floor(remaining / (1000 * 60));
+            const seconds = Math.floor((remaining % (1000 * 60)) / 1000);
+            return InteractionHelper.safeEditReply(interaction, { 
+                content: `⛏️ **You are exhausted!** Rest for **${minutes}m ${seconds}s** before returning to the mines.` 
+            });
+        }
 
-                throw createError(
-                    "Mining cooldown active",
-                    ErrorTypes.RATE_LIMIT,
-                    `Your pickaxe is cooling down. Wait for **${hours}h ${minutes}m** before mining again.`,
-                    { remaining, cooldownType: 'mine' }
-                );
-            }
+        // 1. Check for Pickaxes in Inventory
+        const hasDiamond = (userData.inventory?.['diamond_pickaxe'] || 0) > 0;
+        const hasNormal = (userData.inventory?.['pickaxe'] || 0) > 0;
+        
+        let multiplier = 1.0;
+        let toolUsed = "bare hands";
 
-            const baseEarned =
-                Math.floor(
-                    Math.random() * (BASE_MAX_REWARD - BASE_MIN_REWARD + 1),
-                ) + BASE_MIN_REWARD;
+        if (hasDiamond) {
+            multiplier = 2.0;
+            toolUsed = "💎 Diamond Pickaxe";
+        } else if (hasNormal) {
+            multiplier = 1.2;
+            toolUsed = "⛏️ Standard Pickaxe";
+        }
 
-            let finalEarned = baseEarned;
-            let multiplierMessage = "";
+        // 2. Pick a random ore (weighted)
+        const roll = Math.random();
+        let minedOre = ORES[0]; // Default Coal
+        if (roll > 0.9) minedOre = ORES[3]; // 10% Uranium
+        else if (roll > 0.7) minedOre = ORES[2]; // 20% Gold
+        else if (roll > 0.4) minedOre = ORES[1]; // 30% Iron
 
-            if (hasDiamondPickaxe > 0) {
-                finalEarned = Math.floor(baseEarned * DIAMOND_PICKAXE_MULTIPLIER);
-                multiplierMessage = `\n💎 **Diamond Pickaxe Bonus: +100%**`;
-            } else if (hasPickaxe > 0) {
-                finalEarned = Math.floor(baseEarned * PICKAXE_MULTIPLIER);
-                multiplierMessage = `\n⛏️ **Pickaxe Bonus: +20%**`;
-            }
+        // 3. Calculate Payout
+        const basePayout = minedOre.value + Math.floor(Math.random() * 100);
+        const finalPayout = Math.floor(basePayout * multiplier);
 
-            const location =
-                MINE_LOCATIONS[
-                    Math.floor(Math.random() * MINE_LOCATIONS.length)
-                ];
+        await EconomyService.addMoney(client, guildId, userId, finalPayout, 'Mining Ores');
+        userData.lastMine = now;
+        await setEconomyData(client, guildId, userId, userData);
 
-            userData.wallet += finalEarned;
-userData.lastMine = now;
+        const embed = new EmbedBuilder()
+            .setTitle('⛏️ Mining Expedition')
+            .setColor(hasDiamond ? '#00cec9' : '#95a5a6')
+            .setDescription(`You swung your ${toolUsed} in the dark caves and struck **${minedOre.name}**!\n\n${minedOre.icon} **+ $${finalPayout.toLocaleString()}**`)
+            .setFooter({ text: multiplier > 1 ? `Multiplier: ${multiplier}x applied!` : 'Buy a pickaxe in the shop to earn more!' });
 
-            await setEconomyData(client, guildId, userId, userData);
-
-            const embed = successEmbed(
-                "💰 Mining Expedition Successful!",
-                `You explored a **${location}** and managed to find minerals worth **$${finalEarned.toLocaleString()}**!${multiplierMessage}`,
-            )
-                .addFields({
-                    name: "💵 New Cash Balance",
-                    value: `$${userData.wallet.toLocaleString()}`,
-                    inline: true,
-                })
-                .setFooter({ text: `Next mine available in 1 hour.` });
-
-            await InteractionHelper.safeEditReply(interaction, { embeds: [embed] });
-    }, { command: 'mine' })
+        await InteractionHelper.safeEditReply(interaction, { embeds: [embed] });
+    }
 };
-
-
-
-
