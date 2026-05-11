@@ -13,7 +13,7 @@ export default {
         .addSubcommand(subcommand =>
             subcommand
                 .setName('browse')
-                .setDescription('Browse the economy shop.'),
+                .setDescription('Browse the economy shop.')
         )
         .addSubcommandGroup(group =>
             group
@@ -22,14 +22,26 @@ export default {
                 .addSubcommand(subcommand =>
                     subcommand
                         .setName('setrole')
-                        .setDescription('Set the Discord role granted when the Premium Role shop item is purchased.')
+                        .setDescription('Set the Discord role granted when a specific VIP tier is purchased.')
+                        .addStringOption(option => 
+                            option.setName('tier')
+                            .setDescription('Which VIP tier are you setting the role for?')
+                            .setRequired(true)
+                            .addChoices(
+                                { name: '🥉 Bronze VIP', value: 'vip_bronze' },
+                                { name: '🥈 Silver VIP', value: 'vip_silver' },
+                                { name: '🥇 Gold VIP', value: 'vip_gold' },
+                                { name: '💎 Diamond VIP', value: 'vip_diamond' },
+                                { name: '🐳 Chaos Whale', value: 'vip_whale' }
+                            )
+                        )
                         .addRoleOption(option =>
                             option
                                 .setName('role')
-                                .setDescription('The role to grant for Premium Role purchases.')
-                                .setRequired(true),
-                        ),
-                ),
+                                .setDescription('The role to grant for this VIP tier.')
+                                .setRequired(true)
+                        )
+                )
         ),
 
     async execute(interaction, config, client) {
@@ -52,9 +64,4 @@ export default {
         } catch (error) {
             logger.error('shop command error:', error);
             await InteractionHelper.safeReply(interaction, {
-                content: '❌ An error occurred while running the shop command.',
-                flags: MessageFlags.Ephemeral,
-            }).catch(() => {});
-        }
-    },
-};
+                content: '❌ An error
