@@ -1,8 +1,9 @@
 import { SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, ComponentType } from 'discord.js';
 import { logger } from '../../utils/logger.js';
 import { InteractionHelper } from '../../utils/interactionHelper.js';
-// Corrected imports to match your economy system
-import { getEconomyData, removeMoney, addMoney } from '../../services/economy.js'; 
+// Corrected imports to match the actual database utility and service
+import EconomyService from '../../services/economyService.js';
+import { getEconomyData } from '../../utils/economy.js';
 
 const SUITS = ['♠', '♥', '♦', '♣'];
 const VALUES = ['2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K', 'A'];
@@ -52,7 +53,7 @@ export default {
         const userId = interaction.user.id;
         const guildId = interaction.guildId;
 
-        // Check Balance using your bot's economy data
+        // Check Balance using the correct utility file
         const userData = await getEconomyData(client, guildId, userId);
         const currentBalance = userData.wallet || 0;
 
@@ -60,7 +61,8 @@ export default {
             return InteractionHelper.safeEditReply(interaction, { content: `❌ You don't have enough cash! Your wallet balance is **$${currentBalance.toLocaleString()}**.` });
         }
 
-        await removeMoney(client, guildId, userId, bet);
+        // Deduct bet using EconomyService
+        await EconomyService.removeMoney(client, guildId, userId, bet, 'Blackjack Bet');
 
         let deck = createDeck();
         let playerHand = [deck.pop(), deck.pop()];
@@ -97,7 +99,7 @@ export default {
         // Check for instant Blackjack
         if (calculateScore(playerHand) === 21) {
             const winnings = Math.floor(bet * 2.5);
-            await addMoney(client, guildId, userId, winnings);
+            await EconomyService.addMoney(client, guildId, userId, winnings, 'Blackjack Win (Natural)');
             return InteractionHelper.safeEditReply(interaction, { embeds: [generateEmbed(false, `🎉 Blackjack! You won **$${winnings.toLocaleString()}**!`)], components: [] });
         }
 
@@ -147,7 +149,7 @@ export default {
             }
 
             if (winnings > 0) {
-                await addMoney(client, guildId, userId, winnings);
+                await EconomyService.addMoney(client, guildId, userId, winnings, 'Blackjack Win');
             }
 
             // Disable buttons and show final hands
