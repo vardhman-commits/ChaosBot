@@ -17,7 +17,8 @@ const VALUES = [
 const ALL_CARDS = [];
 SUITS.forEach(suit => VALUES.forEach(val => ALL_CARDS.push({ ...val, suit })));
 
-const BOT_NAMES = ['Bot Raju', 'Bot Farhan', 'Bot Rancho', 'Bot Chatur', 'Bot Priya', 'Bot Simran', 'Bot Babu Rao'];
+// FIX 1: Reduced to 4 Bots for a balanced 5-player table
+const BOT_NAMES = ['Bot Raju', 'Bot Farhan', 'Bot Chatur', 'Bot Simran'];
 
 function createDeck() {
     return [...ALL_CARDS].sort(() => Math.random() - 0.5);
@@ -86,7 +87,7 @@ function getBestScore(hand, revealedJokerWeights) {
 export default {
     data: new SlashCommandBuilder()
         .setName('teenpatti')
-        .setDescription('Play Teen Patti (1v7 Bots) with 4 Jokers & Blind betting!')
+        .setDescription('Play Teen Patti (1v4 Bots) with 2 Jokers!')
         .addIntegerOption(option =>
             option.setName('ante')
                 .setDescription('The base starting bet amount')
@@ -111,9 +112,9 @@ export default {
                 return InteractionHelper.safeEditReply(interaction, { content: `❌ You need at least **$${(initialAnte * 10).toLocaleString()}** to afford the bets.` });
             }
 
-            // Game Initialization (4 Middle Jokers)
+            // FIX 2: Reduced to 2 Middle Jokers
             let deck = createDeck();
-            let middleCards = [deck.pop(), deck.pop(), deck.pop(), deck.pop()];
+            let middleCards = [deck.pop(), deck.pop()];
             let playerHand = [deck.pop(), deck.pop(), deck.pop()];
             
             let bots = BOT_NAMES.map(name => ({
@@ -122,23 +123,22 @@ export default {
                 active: true
             }));
 
-            let round = 0; // 0=start, 1,2,3,4=reveals, 5=showdown
+            let round = 0; // 0=start, 1,2=reveals, 3=showdown
             let totalInvested = 0;
             let pot = 0;
 
-            // Initial Buy-in
             const initialBuyIn = initialAnte * (1 + bots.length); 
             pot += initialBuyIn;
             totalInvested += initialAnte;
             await EconomyService.removeMoney(client, guildId, userId, initialAnte, 'Teen Patti Ante');
 
-            const getRevealedJokers = (rnd) => middleCards.slice(0, Math.min(rnd, 4)).map(c => c.weight);
+            const getRevealedJokers = (rnd) => middleCards.slice(0, Math.min(rnd, 2)).map(c => c.weight);
 
             const generateTableEmbed = (rnd, isShowdown = false) => {
                 const revealedWeights = getRevealedJokers(rnd);
                 const playerEval = (isBlind && !isShowdown) ? { name: 'Blind (Hidden)' } : getBestScore(playerHand, revealedWeights);
                 
-                const tableStr = `**Middle Cards (4 Jokers):**\n🃏 ` + 
+                const tableStr = `**Middle Cards (2 Jokers):**\n🃏 ` + 
                     middleCards.map((c, i) => fCard(c, i >= rnd)).join(' ┃ ') + `\n\n` +
                     `**Your Hand:**\n👉 ` + playerHand.map(c => fCard(c, isBlind && !isShowdown)).join(' ┃ ') + 
                     `\n*Current Strength: **${playerEval.name}***`;
@@ -153,9 +153,9 @@ export default {
                 }).join('\n');
 
                 return new EmbedBuilder()
-                    .setTitle('🃏 Teen Patti (Table Joker) 🃏')
+                    .setTitle('🃏 Teen Patti (5 Players) 🃏')
                     .setColor(isShowdown ? '#f1c40f' : (isBlind ? '#9b59b6' : '#3498db'))
-                    .setDescription(`**Round ${rnd}/4** | 💰 **POT: $${pot.toLocaleString()}**\n\n${tableStr}\n\n**Opponents:**\n${botsStr}`)
+                    .setDescription(`**Round ${rnd}/2** | 💰 **POT: $${pot.toLocaleString()}**\n\n${tableStr}\n\n**Opponents:**\n${botsStr}`)
                     .setFooter({ text: `Status: ${isBlind ? 'BLIND (Half Price)' : 'SEEN (Full Price)'} | Invested: $${totalInvested.toLocaleString()}` });
             };
 
@@ -163,12 +163,12 @@ export default {
                 let costCall = isBlind ? baseBet : baseBet * 2;
                 let costDouble = isBlind ? baseBet * 2 : baseBet * 4;
                 
-                let labelCall = rnd === 4 ? `Showdown ($${costCall})` : `Call ($${costCall})`;
-                let labelDouble = rnd === 4 ? `Double & Showdown ($${costDouble})` : `Double Bet ($${costDouble})`;
+                let labelCall = rnd === 2 ? `Showdown ($${costCall})` : `Call ($${costCall})`;
+                let labelDouble = rnd === 2 ? `Double & Showdown ($${costDouble})` : `Double Bet ($${costDouble})`;
 
                 const row = new ActionRowBuilder();
                 
-                if (isBlind && rnd < 5) {
+                if (isBlind && rnd < 3) {
                     row.addComponents(new ButtonBuilder().setCustomId('tp_see').setLabel('👀 See Cards').setStyle(ButtonStyle.Secondary));
                 }
                 
@@ -205,18 +205,16 @@ export default {
                 } else if (i.customId === 'tp_call' || i.customId === 'tp_double') {
                     
                     if (i.customId === 'tp_double') {
-                        baseBet *= 2; // Permanently doubles the table stakes
+                        baseBet *= 2; 
                     }
 
                     let cost = isBlind ? baseBet : baseBet * 2;
 
-                    // Check balance
                     const checkData = await getEconomyData(client, guildId, userId);
                     if ((checkData.wallet || 0) < cost) {
                         return i.followUp({ content: `❌ You ran out of money and were forced to fold!`, ephemeral: true });
                     }
 
-                    // Process player bet
                     await EconomyService.removeMoney(client, guildId, userId, cost, 'Teen Patti Round Bet');
                     totalInvested += cost;
                     pot += cost;
@@ -224,20 +222,20 @@ export default {
                     round++;
                     const revealedWeights = getRevealedJokers(round);
 
-                    // Process Bot AI (Bots pay 2x baseBet because they are 'Seen')
+                    // FIX 3: Bots are now more easily scared into folding
                     let activeBotsCount = 0;
                     bots.forEach(bot => {
                         if (!bot.active) return;
                         const score = getBestScore(bot.hand, revealedWeights).score;
                         
                         let foldChance = 0;
-                        if (score < 200000) foldChance = 0.4 + (round * 0.1); 
-                        else if (score < 300000) foldChance = 0.1; 
+                        if (score < 200000) foldChance = 0.7; // 70% chance to fold a High Card
+                        else if (score < 300000) foldChance = 0.3; // 30% chance to fold a basic Pair
 
                         if (Math.random() < foldChance) {
                             bot.active = false;
                         } else {
-                            pot += (baseBet * 2); // Bot matches the new stakes
+                            pot += (baseBet * 2); 
                             activeBotsCount++;
                         }
                     });
@@ -247,7 +245,7 @@ export default {
                         return;
                     }
 
-                    if (round === 5) {
+                    if (round === 3) {
                         collector.stop('showdown');
                     } else {
                         await i.editReply({ embeds: [generateTableEmbed(round)], components: [buildButtons(round)] });
@@ -256,7 +254,7 @@ export default {
             });
 
             collector.on('end', async (collected, reason) => {
-                const finalJokers = getRevealedJokers(4);
+                const finalJokers = getRevealedJokers(2);
                 const pEval = getBestScore(playerHand, finalJokers);
 
                 if (reason === 'folded' || reason === 'time') {
@@ -286,7 +284,7 @@ export default {
                         }
                     });
 
-                    const embed = generateTableEmbed(4, true);
+                    const embed = generateTableEmbed(2, true);
 
                     if (pEval.score > highestBotScore) {
                         await EconomyService.addMoney(client, guildId, userId, pot, 'Teen Patti Win (Showdown)');
