@@ -9,8 +9,8 @@ import { handleInteractionError, TitanBotError, ErrorTypes } from '../../utils/e
 import { checkUserPermissions } from '../../utils/permissionGuard.js';
 import { setUserLevel, getLevelingConfig } from '../../services/leveling.js';
 import { createEmbed } from '../../utils/embeds.js';
-
 import { InteractionHelper } from '../../utils/interactionHelper.js';
+
 export default {
   data: new SlashCommandBuilder()
     .setName('levelset')
@@ -32,17 +32,10 @@ export default {
     .setDMPermission(false),
   category: 'Leveling',
 
-  
-
-
-
-
-
   async execute(interaction, config, client) {
     try {
       await InteractionHelper.safeDefer(interaction);
 
-      
       const hasPermission = await checkUserPermissions(
         interaction,
         PermissionFlagsBits.ManageGuild,
@@ -66,7 +59,6 @@ export default {
       const targetUser = interaction.options.getUser('user');
       const newLevel = interaction.options.getInteger('level');
 
-      
       const member = await interaction.guild.members.fetch(targetUser.id).catch(() => null);
       if (!member) {
         throw new TitanBotError(
@@ -76,8 +68,30 @@ export default {
         );
       }
 
-      
+      // Update the database
       const userData = await setUserLevel(client, interaction.guildId, targetUser.id, newLevel);
+
+      // --- NEW LOGIC: Award roles when level is manually set ---
+      if (levelingConfig.roleRewards) {
+        // Loop through all configured role rewards
+        for (const [reqLevel, roleId] of Object.entries(levelingConfig.roleRewards)) {
+          // If the user's new level is greater than or equal to the required level for this role
+          if (newLevel >= Number(reqLevel)) {
+            // Check if they already have the role to prevent API spam
+            if (!member.roles.cache.has(roleId)) {
+              try {
+                const role = interaction.guild.roles.cache.get(roleId);
+                if (role) {
+                  await member.roles.add(role, `Admin set level to ${newLevel}`);
+                }
+              } catch (err) {
+                logger.error(`Failed to assign level reward role to ${member.user.id} during /levelset:`, err);
+              }
+            }
+          }
+        }
+      }
+      // ---------------------------------------------------------
 
       await InteractionHelper.safeEditReply(interaction, {
         embeds: [
@@ -101,5 +115,4 @@ export default {
     }
   }
 };
-
 
