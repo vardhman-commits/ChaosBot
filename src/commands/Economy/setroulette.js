@@ -9,6 +9,50 @@ const activeRouletteServers = new Set();
 // Global memory for spin history (Allows /roulettestats to read it)
 export const globalSpinHistory = new Map();
 
+// --- ANALYTICS ENGINE ---
+function getTableStats(history) {
+    const data = history.slice(-100); 
+    
+    if (data.length === 0) {
+        return {
+            breakdown: "No data yet.",
+            hot: "N/A", 
+            cold: "N/A",
+            historyString: "*No spins recorded yet. The table is fresh!*"
+        };
+    }
+
+    let r = 0, b = 0, g = 0;
+    let freq = {};
+    
+    data.forEach(num => {
+        if (num === 0) g++;
+        else if (RED_NUMBERS.includes(num)) r++;
+        else b++;
+        freq[num] = (freq[num] || 0) + 1;
+    });
+
+    const total = data.length;
+    const rPct = ((r/total)*100).toFixed(1);
+    const bPct = ((b/total)*100).toFixed(1);
+    const gPct = ((g/total)*100).toFixed(1);
+
+    const breakdown = `🔴 **Red:** ${r} (${rPct}%)\n⚫ **Black:** ${b} (${bPct}%)\n🟢 **Green:** ${g} (${gPct}%)`;
+
+    const sorted = Object.entries(freq).sort((a,b) => b[1] - a[1]);
+    const hot = sorted.slice(0, 5).map(x => `**${x[0]}**`).join(', ') || "N/A";
+    
+    const allNums = Array.from({length:37}, (_,i) => i);
+    const cold = allNums.map(n => [n, freq[n]||0]).sort((a,b) => a[1]-b[1]).slice(0,5).map(x => `**${x[0]}**`).join(', ');
+
+    const historyString = data.map(num => {
+        if (num === 0) return '🟢0';
+        return RED_NUMBERS.includes(num) ? `🔴${num}` : `⚫${num}`;
+    }).join(' ');
+
+    return { breakdown, hot, cold, historyString };
+}
+
 export default {
     data: new SlashCommandBuilder()
         .setName('setroulette')
@@ -23,7 +67,6 @@ export default {
 
         activeRouletteServers.add(interaction.guildId);
         
-        // Initialize an empty history array for this server if it doesn't exist yet
         if (!globalSpinHistory.has(interaction.guildId)) {
             globalSpinHistory.set(interaction.guildId, []);
         }
@@ -33,20 +76,12 @@ export default {
     }
 };
 
-function formatHistory(history) {
-    if (history.length === 0) return "*No spins yet. The table is fresh!*";
-    const recentSpins = history.slice(-15);
-    return recentSpins.map(num => {
-        if (num === 0) return '🟢**0**';
-        return RED_NUMBERS.includes(num) ? `🔴**${num}**` : `⚫**${num}**`;
-    }).join(' ┃ ');
-}
-
 async function runRouletteLoop(channel, client, guildId) {
     while (activeRouletteServers.has(guildId)) {
         try {
             let currentBets = [];
             let spinHistory = globalSpinHistory.get(guildId);
+            const stats = getTableStats(spinHistory);
 
             // ==========================================
             // PHASE 1: BETTING OPEN
@@ -73,7 +108,10 @@ async function runRouletteLoop(channel, client, guildId) {
                 .setColor('#2ecc71')
                 .setDescription(`**Betting is OPEN!** You have **1 Minute** to place your bets.\nClick the button below to play.`)
                 .addFields(
-                    { name: '🔄 Recent Spins', value: formatHistory(spinHistory), inline: false },
+                    { name: '📊 Last 100 Spins Analytics', value: stats.breakdown, inline: true },
+                    { name: '🔥 Hot Numbers', value: stats.hot, inline: true },
+                    { name: '🧊 Cold Numbers', value: stats.cold, inline: true },
+                    { name: `📜 Spin History (Last ${Math.min(spinHistory.length, 100)})`, value: stats.historyString, inline: false },
                     { name: 'Roulette Board', value: tableArt, inline: false },
                     { name: '🔴 Red / ⚫ Black', value: 'Payout: **1:1**', inline: true },
                     { name: '🔵 Even / 🟡 Odd', value: 'Payout: **1:1**', inline: true },
@@ -162,7 +200,7 @@ async function runRouletteLoop(channel, client, guildId) {
             const isEven = winningNumber !== 0 && winningNumber % 2 === 0;
             const isOdd = winningNumber !== 0 && winningNumber % 2 !== 0;
 
-            // Save to global history (Keep max 500 spins to prevent memory leaks)
+            // Save to global history (Keep max 500 spins)
             spinHistory.push(winningNumber);
             if (spinHistory.length > 500) spinHistory.shift();
 
@@ -176,25 +214,18 @@ async function runRouletteLoop(channel, client, guildId) {
             for (const bet of currentBets) {
                 let won = false; let multiplier = 0;
 
-                // 1:1 Bets
                 if (bet.type === 'red' && isRed) { won = true; multiplier = 2; }
                 else if (bet.type === 'black' && isBlack) { won = true; multiplier = 2; }
                 else if (bet.type === 'even' && isEven) { won = true; multiplier = 2; }
                 else if (bet.type === 'odd' && isOdd) { won = true; multiplier = 2; }
                 else if (bet.type === '1-18' && winningNumber >= 1 && winningNumber <= 18) { won = true; multiplier = 2; }
                 else if (bet.type === '19-36' && winningNumber >= 19 && winningNumber <= 36) { won = true; multiplier = 2; }
-                
-                // 2:1 Bets (Dozens)
                 else if (bet.type === '1-12' && winningNumber >= 1 && winningNumber <= 12) { won = true; multiplier = 3; }
                 else if (bet.type === '13-24' && winningNumber >= 13 && winningNumber <= 24) { won = true; multiplier = 3; }
                 else if (bet.type === '25-36' && winningNumber >= 25 && winningNumber <= 36) { won = true; multiplier = 3; }
-                
-                // 2:1 Bets (Columns)
                 else if (bet.type === 'col1' && winningNumber !== 0 && winningNumber % 3 === 1) { won = true; multiplier = 3; }
                 else if (bet.type === 'col2' && winningNumber !== 0 && winningNumber % 3 === 2) { won = true; multiplier = 3; }
                 else if (bet.type === 'col3' && winningNumber !== 0 && winningNumber % 3 === 0) { won = true; multiplier = 3; }
-                
-                // 35:1 Bets (Straight Up)
                 else if (parseInt(bet.type) === winningNumber) { won = true; multiplier = 36; }
 
                 if (won) {
