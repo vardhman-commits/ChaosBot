@@ -1,127 +1,62 @@
-import { SlashCommandBuilder } from 'discord.js';
-import { createEmbed, errorEmbed, successEmbed, infoEmbed, warningEmbed } from '../../utils/embeds.js';
-import { getEconomyData, setEconomyData } from '../../utils/economy.js';
-import { withErrorHandling, createError, ErrorTypes } from '../../utils/errorHandler.js';
-import { logger } from '../../utils/logger.js';
+import { SlashCommandBuilder, EmbedBuilder } from 'discord.js';
 import { InteractionHelper } from '../../utils/interactionHelper.js';
+import { getEconomyData, setEconomyData } from '../../utils/economy.js';
+import EconomyService from '../../services/economyService.js';
 
-const WORK_COOLDOWN = 30 * 60 * 1000;
-const MIN_WORK_AMOUNT = 50;
-const MAX_WORK_AMOUNT = 300;
-const LAPTOP_MULTIPLIER = 1.5;
-const WORK_JOBS = [
-    "Software Developer",
-    "Barista",
-    "Janitor",
-    "YouTuber",
-    "Discord Bot Developer",
-    "Cashier",
-    "Pizza Delivery Driver",
-    "Librarian",
-    "Gardener",
-    "Data Analyst",
+const COOLDOWN = 30 * 60 * 1000; // 30 Minutes
+
+const JOBS = [
+    'flipped burgers at McDonald\'s', 'fixed bugs in ChaosBot', 'delivered pizzas', 
+    'walked the neighbor\'s dog', 'mined crypto', 'sold lemonade on the corner'
 ];
 
 export default {
     data: new SlashCommandBuilder()
         .setName('work')
-        .setDescription('Work to earn some money'),
+        .setDescription('Work a shift to earn some honest cash.'),
+    category: 'Economy',
 
-    execute: withErrorHandling(async (interaction, config, client) => {
-        const deferred = await InteractionHelper.safeDefer(interaction);
-        if (!deferred) return;
-            
-            const userId = interaction.user.id;
-            const guildId = interaction.guildId;
-            const now = Date.now();
+    async execute(interaction, config, client) {
+        await InteractionHelper.safeDefer(interaction);
+        const userId = interaction.user.id;
+        const guildId = interaction.guildId;
+        const now = Date.now();
 
-            const userData = await getEconomyData(client, guildId, userId);
+        const userData = await getEconomyData(client, guildId, userId);
+        const lastWork = userData.lastWork || 0;
 
-            if (!userData) {
-                throw createError(
-                    "Failed to load economy data for work",
-                    ErrorTypes.DATABASE,
-                    "Failed to load your economy data. Please try again later.",
-                    { userId, guildId }
-                );
-            }
-
-            logger.debug(`[ECONOMY] Work command started for ${userId}`, { userId, guildId });
-
-            const lastWork = userData.lastWork || 0;
-            const inventory = userData.inventory || {};
-            const extraWorkShifts = inventory["extra_work"] || 0;
-            const hasLaptop = inventory["laptop"] || 0;
-
-            let cooldownActive = now < lastWork + WORK_COOLDOWN;
-            let usedConsumable = false;
-
-            if (cooldownActive) {
-                if (extraWorkShifts > 0) {
-                    inventory["extra_work"] = (inventory["extra_work"] || 0) - 1;
-                    usedConsumable = true;
-                } else {
-                    const remaining = lastWork + WORK_COOLDOWN - now;
-                    throw createError(
-                        "Work cooldown active",
-                        ErrorTypes.RATE_LIMIT,
-                        `You're working too fast! Wait **${Math.floor(remaining / 3600000)}h ${Math.floor((remaining % 3600000) / 60000)}m** before working again.`,
-                        { timeRemaining: remaining, cooldownType: 'work' }
-                    );
-                }
-            }
-
-            let earned = Math.floor(Math.random() * (MAX_WORK_AMOUNT - MIN_WORK_AMOUNT + 1)) + MIN_WORK_AMOUNT;
-            const job = WORK_JOBS[Math.floor(Math.random() * WORK_JOBS.length)];
-
-            
-            let multiplierMessage = "";
-            if (hasLaptop > 0) {
-                earned = Math.floor(earned * LAPTOP_MULTIPLIER);
-                multiplierMessage = "\n💻 **Laptop Bonus:** +50% earnings!";
-            }
-
-            userData.wallet = (userData.wallet || 0) + earned;
-            userData.lastWork = now;
-
-            await setEconomyData(client, guildId, userId, userData);
-
-            logger.info(`[ECONOMY_TRANSACTION] Work completed`, {
-                userId,
-                guildId,
-                amount: earned,
-                job,
-                usedConsumable,
-                hasLaptop: hasLaptop > 0,
-                newWallet: userData.wallet,
-                timestamp: new Date().toISOString()
+        if (now < lastWork + COOLDOWN) {
+            const remaining = lastWork + COOLDOWN - now;
+            const minutes = Math.floor(remaining / (1000 * 60));
+            const seconds = Math.floor((remaining % (1000 * 60)) / 1000);
+            return InteractionHelper.safeEditReply(interaction, { 
+                content: `🏢 **Your shift hasn't started yet!** Come back in **${minutes}m ${seconds}s**.` 
             });
+        }
 
-            const embed = successEmbed(
-                "💼 Work Complete!",
-                `You worked as a **${job}** and earned **$${earned.toLocaleString()}**!${multiplierMessage}`
-            )
-                .addFields(
-                    {
-                        name: "💰 New Balance",
-                        value: `$${userData.wallet.toLocaleString()}`,
-                        inline: true,
-                    },
-                    {
-                        name: "⏰ Next Work",
-                        value: `<t:${Math.floor((now + WORK_COOLDOWN) / 1000)}:R>`,
-                        inline: true,
-                    }
-                )
-                .setFooter({
-                    text: `Requested by ${interaction.user.tag}`,
-                    iconURL: interaction.user.displayAvatarURL(),
-                });
+        // Base Pay: $300 - $800
+        let pay = Math.floor(Math.random() * 500) + 300;
+        let bonusText = "";
 
-            await InteractionHelper.safeEditReply(interaction, { embeds: [embed] });
-    }, { command: 'work' })
+        // Shop Item Integration: Check for Laptop
+        const hasLaptop = (userData.inventory?.['laptop'] || 0) > 0;
+        if (hasLaptop) {
+            pay = Math.floor(pay * 1.5);
+            bonusText = "\n💻 *Your **Laptop** allowed you to work remotely for a 1.5x bonus!*";
+        }
+
+        const job = JOBS[Math.floor(Math.random() * JOBS.length)];
+        
+        await EconomyService.addMoney(client, guildId, userId, pay, 'Work Salary');
+        
+        userData.lastWork = now;
+        await setEconomyData(client, guildId, userId, userData);
+
+        const embed = new EmbedBuilder()
+            .setTitle('💼 Shift Completed')
+            .setColor('#3498db')
+            .setDescription(`You ${job} and earned **$${pay.toLocaleString()}**.${bonusText}`);
+
+        await InteractionHelper.safeEditReply(interaction, { embeds: [embed] });
+    }
 };
-
-
-
-
