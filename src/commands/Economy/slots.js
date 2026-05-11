@@ -87,13 +87,14 @@ export default {
                     // 4. Calculate Final Grid
                     const finalGrid = generateGrid();
                     
-                    // Rig the game in the player's favor (50% chance to force at least a small win)
-                    if (Math.random() < 0.5) {
+                    // Rig the game slightly so it's not brutal, but not a free money glitch (15% chance to force a win)
+                    if (Math.random() < 0.15) {
                         const symbol = SLOTS[Math.floor(Math.random() * (SLOTS.length - 2))]; 
                         finalGrid[1][0] = symbol;
                         finalGrid[1][1] = symbol; // Guarantee 2 matching
-                        // 30% chance to upgrade the rig to a 3-match jackpot
-                        if (Math.random() < 0.3) {
+                        
+                        // Only 5% chance to upgrade the rig to a 3-match jackpot
+                        if (Math.random() < 0.05) {
                             finalGrid[1][2] = symbol;
                         }
                     }
