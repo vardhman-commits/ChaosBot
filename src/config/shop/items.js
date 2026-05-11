@@ -1,8 +1,3 @@
-
-
-
-
-
 export const shopItems = [
     {
         id: 'extra_work',
@@ -11,12 +6,8 @@ export const shopItems = [
         description: 'Allows 1 extra use of the `/work` command.',
         type: 'consumable',
         maxQuantity: 5,
-cooldown: 86400000,
-        effect: {
-            type: 'command_boost',
-            command: 'work',
-            uses: 1
-        }
+        cooldown: 86400000,
+        effect: { type: 'command_boost', command: 'work', uses: 1 }
     },
     {
         id: 'bank_upgrade_1',
@@ -25,47 +16,72 @@ cooldown: 86400000,
         description: 'Increases bank capacity and allows more funds to be deposited.',
         type: 'upgrade',
         maxLevel: 5,
-        effect: {
-            type: 'bank_capacity',
-            multiplier: 1.5
-        }
+        effect: { type: 'bank_capacity', multiplier: 1.5 }
     },
     {
         id: 'diamond_pickaxe',
-        name: 'Diamond Pickaxe',
+        name: '💎 Diamond Pickaxe',
         price: 50000,
-        description: 'Increases yield from `/mine`',
+        description: 'Massively increases yield from `/mine`',
         type: 'tool',
         durability: 100,
-        effect: {
-            type: 'mining_yield',
-            multiplier: 2.0
-        }
+        effect: { type: 'mining_yield', multiplier: 2.0 }
+    },
+    // --- 5 NEW PREMIUM ROLES ---
+    {
+        id: 'vip_bronze',
+        name: '🥉 Bronze VIP Role',
+        price: 50000,
+        description: 'A starter premium role granting a 5% daily bonus.',
+        type: 'role',
+        roleId: null, // Admin sets this later via /shop config
+        effect: { type: 'daily_bonus', multiplier: 1.05 }
     },
     {
-        id: 'premium_role',
-        name: 'Premium Server Role',
-        price: 15000,
-        description: 'A special role granting a fancy color and a 10% daily bonus.',
+        id: 'vip_silver',
+        name: '🥈 Silver VIP Role',
+        price: 150000,
+        description: 'A shiny premium role granting a 10% daily bonus.',
         type: 'role',
-roleId: null,
-        effect: {
-            type: 'daily_bonus',
-            multiplier: 1.1
-        }
+        roleId: null,
+        effect: { type: 'daily_bonus', multiplier: 1.10 }
     },
+    {
+        id: 'vip_gold',
+        name: '🥇 Gold VIP Role',
+        price: 350000,
+        description: 'A prestigious role granting a 15% daily bonus.',
+        type: 'role',
+        roleId: null,
+        effect: { type: 'daily_bonus', multiplier: 1.15 }
+    },
+    {
+        id: 'vip_diamond',
+        name: '💎 Diamond VIP Role',
+        price: 750000,
+        description: 'An elite role granting a 20% daily bonus.',
+        type: 'role',
+        roleId: null,
+        effect: { type: 'daily_bonus', multiplier: 1.20 }
+    },
+    {
+        id: 'vip_whale',
+        name: '🐳 Chaos Whale Role',
+        price: 2000000,
+        description: 'The ultimate flex. Grants an insane 30% daily bonus.',
+        type: 'role',
+        roleId: null,
+        effect: { type: 'daily_bonus', multiplier: 1.30 }
+    },
+    // ---------------------------
     {
         id: 'lucky_clover',
-        name: 'Lucky Clover',
+        name: '🍀 Lucky Clover',
         price: 10000,
         description: 'Increases the chance of winning a higher payout on `/gamble` once.',
         type: 'consumable',
         maxQuantity: 10,
-        effect: {
-            type: 'gamble_boost',
-            multiplier: 1.5,
-            uses: 1
-        }
+        effect: { type: 'gamble_boost', multiplier: 1.5, uses: 1 }
     },
     {
         id: 'fishing_rod',
@@ -74,10 +90,7 @@ roleId: null,
         description: 'Used for fishing commands',
         type: 'tool',
         durability: 100,
-        effect: {
-            type: 'fishing_yield',
-            multiplier: 1.0
-        }
+        effect: { type: 'fishing_yield', multiplier: 1.0 }
     },
     {
         id: 'pickaxe',
@@ -86,10 +99,7 @@ roleId: null,
         description: 'Used for mining commands',
         type: 'tool',
         durability: 100,
-        effect: {
-            type: 'mining_yield',
-            multiplier: 1.2
-        }
+        effect: { type: 'mining_yield', multiplier: 1.2 }
     },
     {
         id: 'laptop',
@@ -98,23 +108,16 @@ roleId: null,
         description: 'Increases work earnings',
         type: 'tool',
         durability: 200,
-        effect: {
-            type: 'work_yield',
-            multiplier: 1.5
-        }
+        effect: { type: 'work_yield', multiplier: 1.5 }
     },
     {
         id: 'lucky_charm',
-        name: '🍀 Lucky Charm',
+        name: '🧿 Lucky Charm',
         price: 10000,
         description: 'Increases luck for gambling. Has 3 uses before being consumed.',
         type: 'consumable',
         maxQuantity: 10,
-        effect: {
-            type: 'gamble_boost',
-            multiplier: 1.3,
-            uses: 3
-        }
+        effect: { type: 'gamble_boost', multiplier: 1.3, uses: 3 }
     },
     {
         id: 'bank_note',
@@ -123,112 +126,64 @@ roleId: null,
         description: 'Increases bank capacity by 10,000. Can be purchased multiple times.',
         type: 'tool',
         durability: null,
-        effect: {
-            type: 'bank_capacity',
-            increase: 10000
-        }
+        effect: { type: 'bank_capacity', increase: 10000 }
     },
     {
         id: 'personal_safe',
-        name: '🔒 Personal Safe',
+        name: '🗄️ Personal Safe',
         price: 30000,
         description: 'Protects your money from theft. Prevents others from robbing you.',
         type: 'tool',
         durability: null,
-        effect: {
-            type: 'robbery_protection',
-            protection: true
-        }
+        effect: { type: 'robbery_protection', protection: true }
     }
 ];
-
-
-
-
-
 
 export function getItemById(itemId) {
     return shopItems.find(item => item.id === itemId);
 }
 
-
-
-
-
-
 export function getItemsByType(type) {
     return shopItems.filter(item => item.type === type);
 }
-
-
-
-
-
 
 export function getItemPrice(itemId) {
     const item = getItemById(itemId);
     return item ? item.price : 0;
 }
 
-
-
-
-
-
-
 export function validatePurchase(itemId, userData) {
     const item = getItemById(itemId);
-    if (!item) {
-        return { valid: false, reason: 'Item not found' };
-    }
+    if (!item) return { valid: false, reason: 'Item not found' };
 
-    
     const inventory = userData.inventory || {};
     const upgrades = userData.upgrades || {};
 
     if (item.type === 'consumable' && item.maxQuantity) {
         const currentQuantity = inventory[itemId] || 0;
         if (currentQuantity >= item.maxQuantity) {
-            return { 
-                valid: false, 
-                reason: `You can only have a maximum of ${item.maxQuantity} ${item.name}s` 
-            };
+            return { valid: false, reason: `You can only have a maximum of ${item.maxQuantity} ${item.name}s` };
         }
     }
 
     if (item.type === 'upgrade' && item.maxLevel) {
-        
         if (upgrades[itemId]) {
-            return { 
-                valid: false, 
-                reason: `You've already purchased ${item.name}` 
-            };
+            return { valid: false, reason: `You've already purchased ${item.name}` };
         }
     }
 
     if (item.type === 'tool') {
-        
         const currentQuantity = inventory[itemId] || 0;
         if (itemId !== 'bank_note' && currentQuantity > 0) {
-            return { 
-                valid: false, 
-                reason: `You already have a ${item.name}` 
-            };
+            return { valid: false, reason: `You already have a ${item.name}` };
         }
     }
 
     if (item.type === 'role' && item.roleId) {
         if (userData.roles?.includes(item.roleId)) {
-            return { 
-                valid: false, 
-                reason: `You already have the ${item.name} role` 
-            };
+            return { valid: false, reason: `You already have the ${item.name} role` };
         }
     }
 
     return { valid: true };
 }
-
-
-
-
