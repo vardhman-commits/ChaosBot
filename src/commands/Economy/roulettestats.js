@@ -22,7 +22,8 @@ export default {
     category: 'Economy',
 
     async execute(interaction) {
-        await InteractionHelper.safeDefer(interaction);
+        // Forces the loading state and the final message to be completely hidden from others
+        await interaction.deferReply({ ephemeral: true }).catch(() => null);
 
         const serverHistory = globalSpinHistory.get(interaction.guildId);
         
@@ -31,6 +32,7 @@ export default {
         }
 
         const requestedSpins = interaction.options.getInteger('spins');
+        
         // Slice the array to grab only the requested amount of recent spins
         const dataToAnalyze = serverHistory.slice(-requestedSpins);
         const actualSpinCount = dataToAnalyze.length;
@@ -42,17 +44,27 @@ export default {
         let evenCount = 0;
         let oddCount = 0;
 
-        // Keep track of which specific numbers hit the most
         const numberFrequency = {};
+        const individualSpinsLog = []; // Array to track the exact order of spins
 
         for (const num of dataToAnalyze) {
-            if (num === 0) greenCount++;
-            else if (RED_NUMBERS.includes(num)) redCount++;
-            else blackCount++;
+            // Count colors and build the emoji string
+            if (num === 0) {
+                greenCount++;
+                individualSpinsLog.push('🟢0');
+            } else if (RED_NUMBERS.includes(num)) {
+                redCount++;
+                individualSpinsLog.push(`🔴${num}`);
+            } else {
+                blackCount++;
+                individualSpinsLog.push(`⚫${num}`);
+            }
 
+            // Count odds/evens
             if (num !== 0 && num % 2 === 0) evenCount++;
             else if (num !== 0 && num % 2 !== 0) oddCount++;
 
+            // Count number frequencies
             numberFrequency[num] = (numberFrequency[num] || 0) + 1;
         }
 
@@ -64,6 +76,7 @@ export default {
         // Find "Hot" and "Cold" numbers
         const sortedNumbers = Object.entries(numberFrequency).sort((a, b) => b[1] - a[1]);
         const hotNumbers = sortedNumbers.slice(0, 5).map(([num, count]) => `**${num}** (${count}x)`).join(', ') || 'N/A';
+        
         // Numbers that didn't appear at all, or appeared the least
         const allNumbers = Array.from({length: 37}, (_, i) => i);
         const coldNumbers = allNumbers
@@ -72,9 +85,14 @@ export default {
             .slice(0, 5)
             .map(([num, count]) => `**${num}** (${count}x)`).join(', ');
 
+        // Join the individual spins into a massive text block
+        const historyBlock = individualSpinsLog.join(' ');
+
         const embed = new EmbedBuilder()
             .setTitle(`📊 Roulette Analytics (Last ${actualSpinCount} Spins)`)
             .setColor('#3498db')
+            // Using the description so it bypasses the 1,024 character limit!
+            .setDescription(`**Individual Spin Log (Oldest ➡️ Newest):**\n\n${historyBlock}`)
             .addFields(
                 { name: 'Color Breakdown', value: `🔴 **Red:** ${redCount} (${redPct}%)\n⚫ **Black:** ${blackCount} (${blackPct}%)\n🟢 **Green:** ${greenCount} (${greenPct}%)`, inline: true },
                 { name: 'Odd / Even', value: `🟡 **Odd:** ${oddCount}\n🔵 **Even:** ${evenCount}`, inline: true },
