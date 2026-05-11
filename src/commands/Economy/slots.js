@@ -1,8 +1,9 @@
 import { SlashCommandBuilder, EmbedBuilder } from 'discord.js';
 import { logger } from '../../utils/logger.js';
 import { InteractionHelper } from '../../utils/interactionHelper.js';
-// Corrected imports to match your economy system
-import { getEconomyData, removeMoney, addMoney } from '../../services/economy.js'; 
+// Corrected imports to match the actual database utility and service
+import EconomyService from '../../services/economyService.js';
+import { getEconomyData } from '../../utils/economy.js';
 
 const SLOTS = ['🍒', '🍋', '🍉', '🍇', '🔔', '💎', '🎰'];
 const MULTIPLIERS = {
@@ -27,7 +28,7 @@ export default {
         const userId = interaction.user.id;
         const guildId = interaction.guildId;
 
-        // 1. Check Balance using your bot's economy data
+        // 1. Check Balance using the correct utility file
         const userData = await getEconomyData(client, guildId, userId);
         const currentBalance = userData.wallet || 0;
         
@@ -35,8 +36,8 @@ export default {
             return InteractionHelper.safeEditReply(interaction, { content: `❌ You don't have enough cash! Your wallet balance is **$${currentBalance.toLocaleString()}**.` });
         }
 
-        // Deduct bet initially
-        await removeMoney(client, guildId, userId, bet);
+        // Deduct bet initially using EconomyService
+        await EconomyService.removeMoney(client, guildId, userId, bet, 'Slots Bet');
 
         // 2. Generate Slot Grid
         const grid = Array.from({ length: 3 }, () => 
@@ -50,7 +51,7 @@ export default {
         let winnings = 0;
         if (isWin) {
             winnings = bet * MULTIPLIERS[winningSymbol];
-            await addMoney(client, guildId, userId, winnings);
+            await EconomyService.addMoney(client, guildId, userId, winnings, 'Slots Winnings');
         }
 
         // 3. Visual UI
