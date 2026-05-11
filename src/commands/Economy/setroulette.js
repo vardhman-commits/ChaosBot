@@ -29,7 +29,21 @@ export default {
     }
 };
 
+// Formats the recent spin history into emojis
+function formatHistory(history) {
+    if (history.length === 0) return "*No spins yet. The table is fresh!*";
+    
+    // Display the last 15 spins
+    const recentSpins = history.slice(-15);
+    return recentSpins.map(num => {
+        if (num === 0) return '🟢**0**';
+        return RED_NUMBERS.includes(num) ? `🔴**${num}**` : `⚫**${num}**`;
+    }).join(' ┃ ');
+}
+
 async function runRouletteLoop(channel, client, guildId) {
+    let spinHistory = []; // Stores the last 100 spins
+
     // This loop runs infinitely until the bot is restarted
     while (activeRouletteServers.has(guildId)) {
         try {
@@ -59,15 +73,17 @@ async function runRouletteLoop(channel, client, guildId) {
             const betEmbed = new EmbedBuilder()
                 .setTitle('🎰 LIVE DEALER ROULETTE 🎰')
                 .setColor('#2ecc71')
-                .setDescription(`**Betting is now OPEN!** You have **1 Minute** to place your bets.\nClick the button below to play.\n${tableArt}`)
+                .setDescription(`**Betting is now OPEN!** You have **1 Minute** to place your bets.\nClick the button below to play.`)
                 .addFields(
+                    { name: '🔄 Recent Spins', value: formatHistory(spinHistory), inline: false },
+                    { name: 'Roulette Board', value: tableArt, inline: false },
                     { name: '🔴 Red / ⚫ Black', value: 'Payout: **1:1**', inline: true },
                     { name: '🔵 Even / 🟡 Odd', value: 'Payout: **1:1**', inline: true },
                     { name: '📦 Dozens (1-12, 13-24, 25-36)', value: 'Payout: **2:1**', inline: true },
                     { name: '🔢 Specific Number (0-36)', value: 'Payout: **35:1**', inline: true }
                 )
-                .setImage('https://i.imgur.com/K0Z6z9B.gif') // Aesthetic spinning wheel GIF
-                .setFooter({ text: 'The Dealer is waiting for bets...' });
+                .setImage('https://media.tenor.com/1-oT_A7qXUEAAAAC/roulette-casino.gif') // Safe Tenor Casino GIF
+                .setFooter({ text: `The Dealer is waiting for bets... • Total Spins Recorded: ${spinHistory.length}` });
 
             const betButton = new ActionRowBuilder().addComponents(
                 new ButtonBuilder().setCustomId('place_bet').setLabel('💰 Place Your Bet').setStyle(ButtonStyle.Success)
@@ -152,7 +168,7 @@ async function runRouletteLoop(channel, client, guildId) {
             await new Promise(resolve => collector.on('end', resolve));
 
             // ==========================================
-            // PHASE 2: NO MORE BETS / SPINNING (10 Sec)
+            // PHASE 2: NO MORE BETS / SPINNING (8 Sec)
             // ==========================================
             
             // Disable the button so no late bets get in
@@ -162,11 +178,11 @@ async function runRouletteLoop(channel, client, guildId) {
                 .setTitle('🎰 ROULETTE SPINNING... 🎰')
                 .setColor('#f1c40f')
                 .setDescription(`**NO MORE BETS!**\n\nThe Dealer is spinning the wheel...\nTotal Bets Placed: **${currentBets.length}**`)
-                .setImage('https://i.imgur.com/szbH3T6.gif'); // Faster spinning GIF
+                .setImage('https://media.tenor.com/CGBiQyUf3b8AAAAC/spin-roulette.gif'); // Safe Tenor Spinning GIF
 
             await gameMessage.edit({ embeds: [spinningEmbed], components: [betButton] });
 
-            // Give it 8 seconds of suspense (Discord rate limits hate exactly 30s of dead time with active edits)
+            // Give it 8 seconds of suspense
             await new Promise(resolve => setTimeout(resolve, 8000));
 
             // ==========================================
@@ -178,6 +194,12 @@ async function runRouletteLoop(channel, client, guildId) {
             const isBlack = winningNumber !== 0 && !isRed;
             const isEven = winningNumber !== 0 && winningNumber % 2 === 0;
             const isOdd = winningNumber !== 0 && winningNumber % 2 !== 0;
+
+            // Update History
+            spinHistory.push(winningNumber);
+            if (spinHistory.length > 100) {
+                spinHistory.shift(); // Remove oldest spin to keep memory clean
+            }
 
             let colorEmoji = '🟢';
             let colorName = 'Green';
