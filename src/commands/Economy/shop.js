@@ -64,4 +64,9 @@ export default {
         } catch (error) {
             logger.error('shop command error:', error);
             await InteractionHelper.safeReply(interaction, {
-                content: '❌ An error
+                content: '❌ An error occurred while running the shop command.',
+                flags: MessageFlags.Ephemeral,
+            }).catch(() => {});
+        }
+    },
+};
