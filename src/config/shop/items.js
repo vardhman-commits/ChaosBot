@@ -1,4 +1,5 @@
 export const shopItems = [
+    // --- BANKING UPGRADES ---
     {
         id: 'extra_work',
         name: 'Extra Work Shift',
@@ -19,22 +20,61 @@ export const shopItems = [
         effect: { type: 'bank_capacity', multiplier: 1.5 }
     },
     {
+        id: 'bank_note',
+        name: '📜 Bank Note',
+        price: 25000,
+        description: 'Increases bank capacity by 10,000. Can be purchased multiple times.',
+        type: 'tool',
+        durability: null,
+        effect: { type: 'bank_capacity', increase: 10000 }
+    },
+
+    // --- GRINDING TOOLS ---
+    {
+        id: 'laptop',
+        name: '💻 Laptop',
+        price: 15000,
+        description: 'Allows remote work. Gives a 1.5x multiplier to `/work` earnings!',
+        type: 'tool',
+        durability: 200,
+        effect: { type: 'work_yield', multiplier: 1.5 }
+    },
+    {
+        id: 'fishing_rod',
+        name: '🎣 Fishing Rod',
+        price: 5000,
+        description: 'Required to catch actual fish instead of muddy boots in `/fish`.',
+        type: 'tool',
+        durability: 100,
+        effect: { type: 'fishing_yield', multiplier: 1.0 }
+    },
+    {
+        id: 'pickaxe',
+        name: '⛏️ Pickaxe',
+        price: 7500,
+        description: 'Required to mine effectively. Grants a 1.2x multiplier to `/mine`.',
+        type: 'tool',
+        durability: 100,
+        effect: { type: 'mining_yield', multiplier: 1.2 }
+    },
+    {
         id: 'diamond_pickaxe',
         name: '💎 Diamond Pickaxe',
         price: 50000,
-        description: 'Massively increases yield from `/mine`',
+        description: 'The ultimate mining tool! Grants a 2.0x multiplier to `/mine`.',
         type: 'tool',
         durability: 100,
         effect: { type: 'mining_yield', multiplier: 2.0 }
     },
-    // --- 5 NEW PREMIUM ROLES ---
+
+    // --- PREMIUM VIP ROLES ---
     {
         id: 'vip_bronze',
         name: '🥉 Bronze VIP Role',
         price: 50000,
         description: 'A starter premium role granting a 5% daily bonus.',
         type: 'role',
-        roleId: null, // Admin sets this later via /shop config
+        roleId: null, 
         effect: { type: 'daily_bonus', multiplier: 1.05 }
     },
     {
@@ -72,70 +112,6 @@ export const shopItems = [
         type: 'role',
         roleId: null,
         effect: { type: 'daily_bonus', multiplier: 1.30 }
-    },
-    // ---------------------------
-    {
-        id: 'lucky_clover',
-        name: '🍀 Lucky Clover',
-        price: 10000,
-        description: 'Increases the chance of winning a higher payout on `/gamble` once.',
-        type: 'consumable',
-        maxQuantity: 10,
-        effect: { type: 'gamble_boost', multiplier: 1.5, uses: 1 }
-    },
-    {
-        id: 'fishing_rod',
-        name: '🎣 Fishing Rod',
-        price: 5000,
-        description: 'Used for fishing commands',
-        type: 'tool',
-        durability: 100,
-        effect: { type: 'fishing_yield', multiplier: 1.0 }
-    },
-    {
-        id: 'pickaxe',
-        name: '⛏️ Pickaxe',
-        price: 7500,
-        description: 'Used for mining commands',
-        type: 'tool',
-        durability: 100,
-        effect: { type: 'mining_yield', multiplier: 1.2 }
-    },
-    {
-        id: 'laptop',
-        name: '💻 Laptop',
-        price: 15000,
-        description: 'Increases work earnings',
-        type: 'tool',
-        durability: 200,
-        effect: { type: 'work_yield', multiplier: 1.5 }
-    },
-    {
-        id: 'lucky_charm',
-        name: '🧿 Lucky Charm',
-        price: 10000,
-        description: 'Increases luck for gambling. Has 3 uses before being consumed.',
-        type: 'consumable',
-        maxQuantity: 10,
-        effect: { type: 'gamble_boost', multiplier: 1.3, uses: 3 }
-    },
-    {
-        id: 'bank_note',
-        name: '📜 Bank Note',
-        price: 25000,
-        description: 'Increases bank capacity by 10,000. Can be purchased multiple times.',
-        type: 'tool',
-        durability: null,
-        effect: { type: 'bank_capacity', increase: 10000 }
-    },
-    {
-        id: 'personal_safe',
-        name: '🗄️ Personal Safe',
-        price: 30000,
-        description: 'Protects your money from theft. Prevents others from robbing you.',
-        type: 'tool',
-        durability: null,
-        effect: { type: 'robbery_protection', protection: true }
     }
 ];
 
@@ -172,6 +148,7 @@ export function validatePurchase(itemId, userData) {
         }
     }
 
+    // Bank Note can be stacked, but other tools cannot
     if (item.type === 'tool') {
         const currentQuantity = inventory[itemId] || 0;
         if (itemId !== 'bank_note' && currentQuantity > 0) {
