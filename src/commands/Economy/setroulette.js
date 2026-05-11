@@ -1,4 +1,4 @@
-import { SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, ModalBuilder, TextInputBuilder, TextInputStyle, ComponentType } from 'discord.js';
+import { SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, ModalBuilder, TextInputBuilder, TextInputStyle, ComponentType, AttachmentBuilder } from 'discord.js';
 import { logger } from '../../utils/logger.js';
 import EconomyService from '../../services/economyService.js';
 import { getEconomyData } from '../../utils/economy.js';
@@ -6,7 +6,7 @@ import { getEconomyData } from '../../utils/economy.js';
 const RED_NUMBERS = [1, 3, 5, 7, 9, 12, 14, 16, 18, 19, 21, 23, 25, 27, 30, 32, 34, 36];
 const activeRouletteServers = new Set();
 
-// Global memory for spin history (Allows /roulettestats to read it)
+// Global memory for spin history
 export const globalSpinHistory = new Map();
 
 export default {
@@ -23,7 +23,6 @@ export default {
 
         activeRouletteServers.add(interaction.guildId);
         
-        // Initialize an empty history array for this server if it doesn't exist yet
         if (!globalSpinHistory.has(interaction.guildId)) {
             globalSpinHistory.set(interaction.guildId, []);
         }
@@ -51,22 +50,9 @@ async function runRouletteLoop(channel, client, guildId) {
             // ==========================================
             // PHASE 1: BETTING OPEN
             // ==========================================
-            const tableArt = `
-🟢 **0**
-🔴 **1** ┃ ⚫ **2** ┃ 🔴 **3** | *1st 12*
-⚫ **4** ┃ 🔴 **5** ┃ ⚫ **6** |
-🔴 **7** ┃ ⚫ **8** ┃ 🔴 **9** |
-⚫ **10**┃ ⚫ **11**┃ 🔴 **12** |
-⚫ **13**┃ 🔴 **14**┃ ⚫ **15** | *2nd 12*
-🔴 **16**┃ ⚫ **17**┃ 🔴 **18** |
-🔴 **19**┃ ⚫ **20**┃ 🔴 **21** |
-⚫ **22**┃ 🔴 **23**┃ ⚫ **24** |
-🔴 **25**┃ ⚫ **26**┃ 🔴 **27** | *3rd 12*
-⚫ **28**┃ ⚫ **29**┃ 🔴 **30** |
-⚫ **31**┃ 🔴 **32**┃ ⚫ **33** |
-🔴 **34**┃ ⚫ **35**┃ 🔴 **36** |
-*Col1* *Col2* *Col3*
-            `;
+            
+            // 1. Load the local Table Image
+            const tableAttachment = new AttachmentBuilder('./src/assets/table.jpg');
 
             const betEmbed = new EmbedBuilder()
                 .setTitle('🎰 LIVE DEALER ROULETTE 🎰')
@@ -74,7 +60,6 @@ async function runRouletteLoop(channel, client, guildId) {
                 .setDescription(`**Betting is OPEN!** You have **1 Minute** to place your bets.\nClick the button below to play.`)
                 .addFields(
                     { name: '🔄 Recent Spins', value: formatHistory(spinHistory), inline: false },
-                    { name: 'Roulette Board', value: tableArt, inline: false },
                     { name: '🔴 Red / ⚫ Black', value: 'Payout: **1:1**', inline: true },
                     { name: '🔵 Even / 🟡 Odd', value: 'Payout: **1:1**', inline: true },
                     { name: '⬇️ Low(1-18) / ⬆️ High(19-36)', value: 'Payout: **1:1**', inline: true },
@@ -82,13 +67,15 @@ async function runRouletteLoop(channel, client, guildId) {
                     { name: '🏛️ Columns (col1, col2, col3)', value: 'Payout: **2:1**', inline: true },
                     { name: '🔢 Specific Number (0-36)', value: 'Payout: **35:1**', inline: true }
                 )
+                .setImage('attachment://table.jpg') // Attach the local image
                 .setFooter({ text: `The Dealer is waiting for bets... • Total Server Spins: ${spinHistory.length}` });
 
             const betButton = new ActionRowBuilder().addComponents(
                 new ButtonBuilder().setCustomId('place_bet').setLabel('💰 Place Your Bet').setStyle(ButtonStyle.Success)
             );
 
-            const gameMessage = await channel.send({ embeds: [betEmbed], components: [betButton] });
+            // Send the message with the file included
+            const gameMessage = await channel.send({ embeds: [betEmbed], components: [betButton], files: [tableAttachment] });
             const collector = gameMessage.createMessageComponentCollector({ componentType: ComponentType.Button, time: 60000 });
 
             collector.on('collect', async (i) => {
@@ -145,12 +132,19 @@ async function runRouletteLoop(channel, client, guildId) {
             // PHASE 2: SPINNING
             // ==========================================
             betButton.components[0].setDisabled(true);
+            
+            // 2. Load the local Spinning Wheel GIF
+            const wheelAttachment = new AttachmentBuilder('./src/assets/wheel.gif');
+
             const spinningEmbed = new EmbedBuilder()
                 .setTitle('🎰 ROULETTE SPINNING... 🎰')
                 .setColor('#f1c40f')
-                .setDescription(`**NO MORE BETS!**\n\nThe Dealer is spinning the wheel...\nTotal Bets Placed: **${currentBets.length}**`);
+                .setDescription(`**NO MORE BETS!**\n\nThe Dealer is spinning the wheel...\nTotal Bets Placed: **${currentBets.length}**`)
+                .setImage('attachment://wheel.gif'); // Attach the spinning GIF
 
-            await gameMessage.edit({ embeds: [spinningEmbed], components: [betButton] });
+            // Replace the table image with the spinning wheel image
+            await gameMessage.edit({ embeds: [spinningEmbed], components: [betButton], files: [wheelAttachment], attachments: [] });
+            
             await new Promise(resolve => setTimeout(resolve, 8000));
 
             // ==========================================
@@ -162,7 +156,6 @@ async function runRouletteLoop(channel, client, guildId) {
             const isEven = winningNumber !== 0 && winningNumber % 2 === 0;
             const isOdd = winningNumber !== 0 && winningNumber % 2 !== 0;
 
-            // Save to global history (Keep max 500 spins to prevent memory leaks)
             spinHistory.push(winningNumber);
             if (spinHistory.length > 500) spinHistory.shift();
 
@@ -213,7 +206,9 @@ async function runRouletteLoop(channel, client, guildId) {
                 .setColor(isRed ? '#e74c3c' : (isBlack ? '#2c3e50' : '#2ecc71'))
                 .setDescription(resultsText);
 
-            await gameMessage.edit({ embeds: [resultEmbed], components: [] });
+            // Clear the files completely so the spinning GIF doesn't stay stuck on the screen
+            await gameMessage.edit({ embeds: [resultEmbed], components: [], files: [], attachments: [] });
+            
             await new Promise(resolve => setTimeout(resolve, 20000));
             await gameMessage.delete().catch(() => null);
 
