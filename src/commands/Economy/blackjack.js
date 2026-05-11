@@ -1,8 +1,8 @@
 import { SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, ComponentType } from 'discord.js';
 import { logger } from '../../utils/logger.js';
 import { InteractionHelper } from '../../utils/interactionHelper.js';
-// TODO: Adjust these imports to match your actual economy service functions
-import { getBalance, removeBalance, addBalance } from '../../services/economyService.js'; 
+// Corrected imports to match your economy system
+import { getEconomyData, removeMoney, addMoney } from '../../services/economy.js'; 
 
 const SUITS = ['♠', '♥', '♦', '♣'];
 const VALUES = ['2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K', 'A'];
@@ -52,12 +52,15 @@ export default {
         const userId = interaction.user.id;
         const guildId = interaction.guildId;
 
-        const currentBalance = await getBalance(client, guildId, userId);
+        // Check Balance using your bot's economy data
+        const userData = await getEconomyData(client, guildId, userId);
+        const currentBalance = userData.wallet || 0;
+
         if (currentBalance < bet) {
-            return InteractionHelper.safeEditReply(interaction, { content: `❌ You don't have enough coins! Your balance is **${currentBalance}**.` });
+            return InteractionHelper.safeEditReply(interaction, { content: `❌ You don't have enough cash! Your wallet balance is **$${currentBalance.toLocaleString()}**.` });
         }
 
-        await removeBalance(client, guildId, userId, bet);
+        await removeMoney(client, guildId, userId, bet);
 
         let deck = createDeck();
         let playerHand = [deck.pop(), deck.pop()];
@@ -78,7 +81,7 @@ export default {
             return new EmbedBuilder()
                 .setTitle('🃏 Blackjack')
                 .setColor(color)
-                .setDescription(`**Bet:** 🪙 ${bet}\n**Status:** ${status}`)
+                .setDescription(`**Bet:** $${bet.toLocaleString()}\n**Status:** ${status}`)
                 .addFields(
                     { name: `Dealer's Hand (${dealerScore})`, value: dealerString, inline: true },
                     { name: `Your Hand (${playerScore})`, value: playerString, inline: true }
@@ -94,8 +97,8 @@ export default {
         // Check for instant Blackjack
         if (calculateScore(playerHand) === 21) {
             const winnings = Math.floor(bet * 2.5);
-            await addBalance(client, guildId, userId, winnings);
-            return InteractionHelper.safeEditReply(interaction, { embeds: [generateEmbed(false, `🎉 Blackjack! You won **🪙 ${winnings}**!`)], components: [] });
+            await addMoney(client, guildId, userId, winnings);
+            return InteractionHelper.safeEditReply(interaction, { embeds: [generateEmbed(false, `🎉 Blackjack! You won **$${winnings.toLocaleString()}**!`)], components: [] });
         }
 
         const message = await InteractionHelper.safeEditReply(interaction, { embeds: [generateEmbed()], components: [row] });
@@ -133,7 +136,7 @@ export default {
                 const dScore = calculateScore(dealerHand);
 
                 if (dScore > 21 || pScore > dScore) {
-                    status = `🎉 You Won **🪙 ${bet * 2}**!`;
+                    status = `🎉 You Won **$${(bet * 2).toLocaleString()}**!`;
                     winnings = bet * 2;
                 } else if (pScore === dScore) {
                     status = `🤝 Push (Tie). Your bet was returned.`;
@@ -144,7 +147,7 @@ export default {
             }
 
             if (winnings > 0) {
-                await addBalance(client, guildId, userId, winnings);
+                await addMoney(client, guildId, userId, winnings);
             }
 
             // Disable buttons and show final hands
