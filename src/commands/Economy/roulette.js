@@ -3,14 +3,16 @@ import { logger } from '../../utils/logger.js';
 import { InteractionHelper } from '../../utils/interactionHelper.js';
 import EconomyService from '../../services/economyService.js';
 import { getEconomyData } from '../../utils/economy.js';
+import { getGuildConfig, updateGuildConfig } from '../../services/guildConfig.js';
+import db from '../../utils/database.js';
 
 const RED_NUMBERS = [1, 3, 5, 7, 9, 12, 14, 16, 18, 19, 21, 23, 25, 27, 30, 32, 34, 36];
 
-// Global Memory (Since they are in the same file now, they share this instantly)
+// Global Memory 
 const activeRouletteServers = new Set();
 const globalSpinHistory = new Map();
 
-// --- LIVE TABLE ANALYTICS ENGINE (For the Automated Dealer UI) ---
+// --- LIVE TABLE ANALYTICS ENGINE ---
 function getTableStats(history) {
     const data = history.slice(-100); 
     
@@ -54,15 +56,51 @@ function getTableStats(history) {
     return { breakdown, hot, cold, historyString };
 }
 
+// --- BOOT PROCESS: WAKE UP THE DEALERS ---
+export async function startPersistentRoulettes(client) {
+    try {
+        const query = `SELECT guild_id, config FROM guild_configs WHERE config->>'rouletteChannel' IS NOT NULL;`;
+        const result = await db.query(query);
+
+        for (const row of result.rows) {
+            const guildId = row.guild_id;
+            const channelId = row.config.rouletteChannel;
+
+            if (channelId && !activeRouletteServers.has(guildId)) {
+                try {
+                    const channel = await client.channels.fetch(channelId);
+                    if (channel) {
+                        activeRouletteServers.add(guildId);
+                        globalSpinHistory.set(guildId, []);
+                        logger.info(`Starting persistent 24/7 Roulette in guild ${guildId}`);
+                        
+                        // Fire and forget
+                        runRouletteLoop(channel, client, guildId);
+                    }
+                } catch (e) {
+                    logger.warn(`Could not start Roulette for guild ${guildId} - Channel ${channelId} missing or inaccessible.`);
+                }
+            }
+        }
+    } catch (error) {
+        logger.error('Failed to load persistent roulettes on boot:', error);
+    }
+}
+
 export default {
     data: new SlashCommandBuilder()
         .setName('roulette')
         .setDescription('Play the 24/7 Automated Roulette or check table statistics.')
         
-        // --- SUBCOMMAND: START ---
+        // --- SUBCOMMAND: SETCHANNEL ---
         .addSubcommand(sub =>
-            sub.setName('start')
-            .setDescription('ADMIN ONLY: Starts a 24/7 Automated Roulette dealer in this channel.')
+            sub.setName('setchannel')
+            .setDescription('ADMIN ONLY: Set the channel for the 24/7 Automated Roulette dealer.')
+            .addChannelOption(option => 
+                option.setName('channel')
+                .setDescription('The channel to run Roulette in (Leave blank to disable)')
+                .setRequired(false)
+            )
         )
         
         // --- SUBCOMMAND: STATS ---
@@ -87,26 +125,43 @@ export default {
         const guildId = interaction.guildId;
 
         // ==========================================
-        //         ADMIN: START ROULETTE
+        //         ADMIN: SET ROULETTE CHANNEL
         // ==========================================
-        if (sub === 'start') {
-            // Manual Admin Verification
+        if (sub === 'setchannel') {
             if (!interaction.member.permissions.has(PermissionFlagsBits.Administrator)) {
-                return interaction.reply({ content: '❌ **Access Denied.** You must be a server Administrator to start the dealer.', ephemeral: true });
+                return interaction.reply({ content: '❌ **Access Denied.** You must be a server Administrator to configure the dealer.', ephemeral: true });
             }
 
+            const channel = interaction.options.getChannel('channel');
+
+            // DISABLING
+            if (!channel) {
+                await updateGuildConfig(client, guildId, { rouletteChannel: null });
+                activeRouletteServers.delete(guildId);
+                globalSpinHistory.delete(guildId);
+                return interaction.reply({ content: '🛑 **Roulette Disabled.** The dealer will finish their current spin and leave the server.', ephemeral: true });
+            }
+
+            // ENABLING / CHANGING
+            if (channel.type !== 0) { // Text Channel
+                return interaction.reply({ content: '❌ Please select a standard Text Channel.', ephemeral: true });
+            }
+
+            // Save to DB
+            await updateGuildConfig(client, guildId, { rouletteChannel: channel.id });
+
+            // If it's already running somewhere else, stop it first
             if (activeRouletteServers.has(guildId)) {
-                return interaction.reply({ content: '❌ A 24/7 Roulette dealer is already running in this server!', ephemeral: true });
+                activeRouletteServers.delete(guildId);
+                await new Promise(resolve => setTimeout(resolve, 1000)); // Brief pause to kill the old loop
             }
 
+            // Start the new loop
             activeRouletteServers.add(guildId);
-            
-            if (!globalSpinHistory.has(guildId)) {
-                globalSpinHistory.set(guildId, []);
-            }
+            if (!globalSpinHistory.has(guildId)) globalSpinHistory.set(guildId, []);
 
-            await interaction.reply({ content: '✅ **24/7 Roulette Dealer Activated!** Starting the first round now...', ephemeral: true });
-            runRouletteLoop(interaction.channel, client, guildId);
+            await interaction.reply({ content: `✅ **24/7 Roulette Dealer Activated!** The dealer is setting up the table in <#${channel.id}>...`, ephemeral: true });
+            runRouletteLoop(channel, client, guildId);
         }
 
         // ==========================================
@@ -185,6 +240,13 @@ export default {
 async function runRouletteLoop(channel, client, guildId) {
     while (activeRouletteServers.has(guildId)) {
         try {
+            // Safety check: Has the admin turned off the module mid-spin?
+            const currentConfig = await getGuildConfig(client, guildId);
+            if (currentConfig.rouletteChannel !== channel.id) {
+                activeRouletteServers.delete(guildId);
+                break;
+            }
+
             let currentBets = [];
             let spinHistory = globalSpinHistory.get(guildId);
             const stats = getTableStats(spinHistory);
@@ -280,6 +342,9 @@ async function runRouletteLoop(channel, client, guildId) {
             });
 
             await new Promise(resolve => collector.on('end', resolve));
+
+            // Stop loop cleanly if it was disabled mid-betting phase
+            if (!activeRouletteServers.has(guildId)) break;
 
             betButton.components[0].setDisabled(true);
             const spinningEmbed = new EmbedBuilder()
