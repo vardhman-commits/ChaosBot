@@ -12,8 +12,8 @@ const WHEEL_ORDER = [0, 32, 15, 19, 4, 21, 2, 25, 17, 34, 6, 27, 13, 36, 11, 30,
 // Global Memory 
 const activeRouletteServers = new Set();
 const globalSpinHistory = new Map();
+const userBetHistory = new Map(); // Tracking up to 50 bets per user!
 
-// The dashboard reads this map to sync the UI!
 export const liveRouletteState = new Map(); 
 
 // --- LIVE TABLE ANALYTICS ENGINE ---
@@ -135,13 +135,22 @@ export default {
                         { name: 'Last 500 Spins', value: 500 }
                     )
             )
+        )
+        
+        .addSubcommand(sub =>
+            sub.setName('history')
+            .setDescription('View your personal betting history (up to the last 50 spins)')
         ),
+        
     category: 'Economy',
 
     async execute(interaction, config, client) {
         const sub = interaction.options.getSubcommand();
         const guildId = interaction.guildId;
 
+        // ==========================================
+        //         ADMIN: SET ROULETTE CHANNEL
+        // ==========================================
         if (sub === 'setchannel') {
             if (!interaction.member.permissions.has(PermissionFlagsBits.Administrator)) {
                 return interaction.reply({ content: '❌ **Access Denied.** You must be a server Administrator to configure the dealer.', ephemeral: true });
@@ -175,6 +184,9 @@ export default {
             runRouletteLoop(channel, client, guildId);
         }
 
+        // ==========================================
+        //         PLAYER: TABLE STATS
+        // ==========================================
         if (sub === 'stats') {
             await interaction.deferReply({ ephemeral: true }).catch(() => null);
 
@@ -207,6 +219,46 @@ export default {
 
             await InteractionHelper.safeEditReply(interaction, { embeds: [embed] });
         }
+
+        // ==========================================
+        //         PLAYER: PERSONAL BET HISTORY
+        // ==========================================
+        if (sub === 'history') {
+            const userHistoryKey = `${guildId}_${interaction.user.id}`;
+            const history = userBetHistory.get(userHistoryKey) || [];
+
+            if (history.length === 0) {
+                return interaction.reply({ content: '❌ You have no recorded roulette bets in this server yet!', ephemeral: true });
+            }
+
+            const embed = new EmbedBuilder()
+                .setTitle(`🎰 Roulette Bet History (${interaction.user.username})`)
+                .setColor('#f1c40f')
+                .setFooter({ text: 'Showing up to last 50 bets (Resets on bot restart)' });
+
+            let desc = '';
+            history.forEach((h, i) => {
+                const outcome = h.won ? `✅ **WON $${h.payout.toLocaleString()}**` : `❌ **LOST**`;
+                const numStr = h.winningNumber === 0 ? '🟢0' : (RED_NUMBERS.includes(h.winningNumber) ? `🔴${h.winningNumber}` : `⚫${h.winningNumber}`);
+                const date = new Date(h.timestamp).toLocaleTimeString();
+                
+                let displayType = h.type.toUpperCase();
+                if(h.type.startsWith('split-')) displayType = `SPLIT (${h.type.split('-').slice(1).join(',')})`;
+                if(h.type.startsWith('corner-')) displayType = `CORNER (${h.type.split('-').slice(1).join(',')})`;
+                if(h.type.startsWith('sixline-')) displayType = `SIX LINE (${h.type.split('-').slice(1).join(',')})`;
+                if(h.type.startsWith('nb-')) displayType = `NEIGHBOURS (${h.type.split('-')[1]} ±${h.type.split('-')[2]})`;
+
+                desc += `\`${i+1}.\` [${date}] Bet **$${h.cost.toLocaleString()}** on **${displayType}** | Landed: ${numStr} | ${outcome}\n`;
+            });
+
+            // Fallback cap if character limit is exceeded (Discord embed desc limit is 4096)
+            if (desc.length > 4000) {
+                desc = desc.substring(0, 4000) + '...\n\n*(Truncated due to Discord character limits)*';
+            }
+
+            embed.setDescription(desc);
+            await interaction.reply({ embeds: [embed], ephemeral: true });
+        }
     }
 };
 
@@ -236,7 +288,6 @@ async function runRouletteLoop(channel, client, guildId) {
             let spinHistory = globalSpinHistory.get(guildId) || [];
             const stats = getTableStats(spinHistory);
 
-            // Dashboard Sync State
             let timeLeft = 60;
             liveRouletteState.set(guildId, { status: 'betting', timeRemaining: timeLeft, winningNumber: null, history: spinHistory });
             
@@ -246,6 +297,22 @@ async function runRouletteLoop(channel, client, guildId) {
                 if (state) state.timeRemaining = timeLeft;
             }, 1000);
 
+            const tableArt = `
+🟢 **0**
+🔴 **1** ┃ ⚫ **2** ┃ 🔴 **3** | *1st 12*
+⚫ **4** ┃ 🔴 **5** ┃ ⚫ **6** |
+🔴 **7** ┃ ⚫ **8** ┃ 🔴 **9** |
+⚫ **10**┃ ⚫ **11**┃ 🔴 **12** |
+⚫ **13**┃ 🔴 **14**┃ ⚫ **15** | *2nd 12*
+🔴 **16**┃ ⚫ **17**┃ 🔴 **18** |
+🔴 **19**┃ ⚫ **20**┃ 🔴 **21** |
+⚫ **22**┃ 🔴 **23**┃ ⚫ **24** |
+🔴 **25**┃ ⚫ **26**┃ 🔴 **27** | *3rd 12*
+⚫ **28**┃ ⚫ **29**┃ 🔴 **30** |
+⚫ **31**┃ 🔴 **32**┃ ⚫ **33** |
+🔴 **34**┃ ⚫ **35**┃ 🔴 **36** |
+*Col1* *Col2* *Col3*`;
+
             const betEmbed = new EmbedBuilder()
                 .setTitle('🎰 LIVE DEALER ROULETTE 🎰')
                 .setColor('#2ecc71')
@@ -254,10 +321,20 @@ async function runRouletteLoop(channel, client, guildId) {
                     { name: '🎨 Colors', value: stats.breakdown, inline: true },
                     { name: '⚖️ Odd / Even', value: stats.oddEven, inline: true },
                     { name: '📏 Low / High', value: stats.lowHigh, inline: true },
+                    { name: '📦 Dozens', value: stats.dozens, inline: true },
+                    { name: '🏛️ Columns', value: stats.columns, inline: true },
+                    { name: '\u200b', value: '\u200b', inline: true },
                     { name: '🔥 Hot Numbers', value: stats.hot, inline: true },
                     { name: '🧊 Cold Numbers', value: stats.cold, inline: true },
                     { name: '\u200b', value: '\u200b', inline: true },
                     { name: `📜 Spin History (Last ${Math.min(spinHistory.length, 100)})`, value: stats.historyString, inline: false },
+                    { name: 'Roulette Board', value: tableArt, inline: false },
+                    { name: '🔴 Red / ⚫ Black', value: 'Payout: **1:1**', inline: true },
+                    { name: '🔵 Even / 🟡 Odd', value: 'Payout: **1:1**', inline: true },
+                    { name: '⬇️ Low(1-18) / ⬆️ High(19-36)', value: 'Payout: **1:1**', inline: true },
+                    { name: '📦 Dozens (1-12, 13-24, 25-36)', value: 'Payout: **2:1**', inline: true },
+                    { name: '🏛️ Columns (col1, col2, col3)', value: 'Payout: **2:1**', inline: true },
+                    { name: '🔢 Specific Number (0-36)', value: 'Payout: **35:1**', inline: true },
                     { name: '🌟 Advanced Bets Guide', value: 'You can type combinations!\n`voisins`, `tiers`, `orphelins`\n`nb <num> <dist>` (e.g. `nb 0 2`)\n`split 5,8`\n`corner 1,2,4,5`\n`sixline 1,2,3,4,5,6`', inline: false }
                 )
                 .setFooter({ text: `The Dealer is waiting for bets... • Total Server Spins: ${spinHistory.length}` });
@@ -374,7 +451,6 @@ async function runRouletteLoop(channel, client, guildId) {
 
             betButton.components[0].setDisabled(true);
 
-            // Generate Winner EARLY for Dashboard Sync
             const winningNumber = Math.floor(Math.random() * 37);
             const state = liveRouletteState.get(guildId);
             if (state) {
@@ -389,7 +465,6 @@ async function runRouletteLoop(channel, client, guildId) {
 
             await gameMessage.edit({ embeds: [spinningEmbed], components: [betButton] });
             
-            // Wait 8 seconds (Dashboard spins visually during this time)
             await new Promise(resolve => setTimeout(resolve, 8000));
 
             const isRed = RED_NUMBERS.includes(winningNumber);
@@ -437,6 +512,20 @@ async function runRouletteLoop(channel, client, guildId) {
                     await EconomyService.addMoney(client, guildId, bet.userId, payout, 'Roulette Winnings');
                     winners.push(`🎉 **${bet.userTag}** won **$${payout.toLocaleString()}** *(Bet: ${bet.type.toUpperCase()})*`);
                 }
+
+                // Log Personal User History
+                const userHistoryKey = `${guildId}_${bet.userId}`;
+                const userHist = userBetHistory.get(userHistoryKey) || [];
+                userHist.unshift({
+                    type: bet.type.toUpperCase(),
+                    cost: bet.cost,
+                    won: won,
+                    payout: payout,
+                    winningNumber: winningNumber,
+                    timestamp: Date.now()
+                });
+                if (userHist.length > 50) userHist.pop();
+                userBetHistory.set(userHistoryKey, userHist);
             }
 
             if (winners.length > 0) resultsText += `🏆 **WINNERS:**\n${winners.join('\n')}`;
