@@ -7,6 +7,7 @@ import { getGuildConfig, updateGuildConfig } from '../../services/guildConfig.js
 import { db } from '../../utils/database.js';
 
 const RED_NUMBERS = [1, 3, 5, 7, 9, 12, 14, 16, 18, 19, 21, 23, 25, 27, 30, 32, 34, 36];
+const WHEEL_ORDER = [0, 32, 15, 19, 4, 21, 2, 25, 17, 34, 6, 27, 13, 36, 11, 30, 8, 23, 10, 5, 24, 16, 33, 1, 20, 14, 31, 9, 22, 18, 29, 7, 28, 12, 35, 3, 26];
 
 // Global Memory 
 const activeRouletteServers = new Set();
@@ -81,8 +82,6 @@ function getTableStats(history) {
 // --- BOOT PROCESS: WAKE UP THE DEALERS ---
 export async function startPersistentRoulettes(client) {
     try {
-        // Iterate over cached guilds safely instead of relying on direct SQL queries
-        // This perfectly solves the "db.query is not a function" error.
         for (const guild of client.guilds.cache.values()) {
             const guildId = guild.id;
             const config = await getGuildConfig(client, guildId);
@@ -96,7 +95,6 @@ export async function startPersistentRoulettes(client) {
                         globalSpinHistory.set(guildId, []);
                         logger.info(`Starting persistent 24/7 Roulette in guild ${guildId}`);
                         
-                        // Fire and forget
                         runRouletteLoop(channel, client, guildId);
                     }
                 } catch (e) {
@@ -114,7 +112,6 @@ export default {
         .setName('roulette')
         .setDescription('Play the 24/7 Automated Roulette or check table statistics.')
         
-        // --- SUBCOMMAND: SETCHANNEL ---
         .addSubcommand(sub =>
             sub.setName('setchannel')
             .setDescription('ADMIN ONLY: Set the channel for the 24/7 Automated Roulette dealer.')
@@ -125,7 +122,6 @@ export default {
             )
         )
         
-        // --- SUBCOMMAND: STATS ---
         .addSubcommand(sub =>
             sub.setName('stats')
             .setDescription('View advanced statistics for the active Roulette table')
@@ -146,9 +142,6 @@ export default {
         const sub = interaction.options.getSubcommand();
         const guildId = interaction.guildId;
 
-        // ==========================================
-        //         ADMIN: SET ROULETTE CHANNEL
-        // ==========================================
         if (sub === 'setchannel') {
             if (!interaction.member.permissions.has(PermissionFlagsBits.Administrator)) {
                 return interaction.reply({ content: '❌ **Access Denied.** You must be a server Administrator to configure the dealer.', ephemeral: true });
@@ -182,9 +175,6 @@ export default {
             runRouletteLoop(channel, client, guildId);
         }
 
-        // ==========================================
-        //         PLAYER: TABLE STATS
-        // ==========================================
         if (sub === 'stats') {
             await interaction.deferReply({ ephemeral: true }).catch(() => null);
 
@@ -224,6 +214,16 @@ export default {
 //      AUTOMATED ROULETTE ENGINE LOOP
 // ==========================================
 async function runRouletteLoop(channel, client, guildId) {
+
+    // CLEANUP OLD ORPHAN MESSAGES UPON STARTUP
+    try {
+        const msgs = await channel.messages.fetch({ limit: 15 });
+        const oldGameMsgs = msgs.filter(m => m.author.id === client.user.id && m.embeds[0] && m.embeds[0].title && m.embeds[0].title.includes('ROULETTE'));
+        for (const msg of oldGameMsgs.values()) {
+            await msg.delete().catch(() => null);
+        }
+    } catch(e) {}
+
     while (activeRouletteServers.has(guildId)) {
         try {
             const currentConfig = await getGuildConfig(client, guildId);
@@ -236,9 +236,7 @@ async function runRouletteLoop(channel, client, guildId) {
             let spinHistory = globalSpinHistory.get(guildId) || [];
             const stats = getTableStats(spinHistory);
 
-            // ===============================================
-            // Dashboard Sync (Timer & Betting)
-            // ===============================================
+            // Dashboard Sync State
             let timeLeft = 60;
             liveRouletteState.set(guildId, { status: 'betting', timeRemaining: timeLeft, winningNumber: null, history: spinHistory });
             
@@ -248,22 +246,6 @@ async function runRouletteLoop(channel, client, guildId) {
                 if (state) state.timeRemaining = timeLeft;
             }, 1000);
 
-            const tableArt = `
-🟢 **0**
-🔴 **1** ┃ ⚫ **2** ┃ 🔴 **3** | *1st 12*
-⚫ **4** ┃ 🔴 **5** ┃ ⚫ **6** |
-🔴 **7** ┃ ⚫ **8** ┃ 🔴 **9** |
-⚫ **10**┃ ⚫ **11**┃ 🔴 **12** |
-⚫ **13**┃ 🔴 **14**┃ ⚫ **15** | *2nd 12*
-🔴 **16**┃ ⚫ **17**┃ 🔴 **18** |
-🔴 **19**┃ ⚫ **20**┃ 🔴 **21** |
-⚫ **22**┃ 🔴 **23**┃ ⚫ **24** |
-🔴 **25**┃ ⚫ **26**┃ 🔴 **27** | *3rd 12*
-⚫ **28**┃ ⚫ **29**┃ 🔴 **30** |
-⚫ **31**┃ 🔴 **32**┃ ⚫ **33** |
-🔴 **34**┃ ⚫ **35**┃ 🔴 **36** |
-*Col1* *Col2* *Col3*`;
-
             const betEmbed = new EmbedBuilder()
                 .setTitle('🎰 LIVE DEALER ROULETTE 🎰')
                 .setColor('#2ecc71')
@@ -272,20 +254,11 @@ async function runRouletteLoop(channel, client, guildId) {
                     { name: '🎨 Colors', value: stats.breakdown, inline: true },
                     { name: '⚖️ Odd / Even', value: stats.oddEven, inline: true },
                     { name: '📏 Low / High', value: stats.lowHigh, inline: true },
-                    { name: '📦 Dozens', value: stats.dozens, inline: true },
-                    { name: '🏛️ Columns', value: stats.columns, inline: true },
-                    { name: '\u200b', value: '\u200b', inline: true },
                     { name: '🔥 Hot Numbers', value: stats.hot, inline: true },
                     { name: '🧊 Cold Numbers', value: stats.cold, inline: true },
                     { name: '\u200b', value: '\u200b', inline: true },
                     { name: `📜 Spin History (Last ${Math.min(spinHistory.length, 100)})`, value: stats.historyString, inline: false },
-                    { name: 'Roulette Board', value: tableArt, inline: false },
-                    { name: '🔴 Red / ⚫ Black', value: 'Payout: **1:1**', inline: true },
-                    { name: '🔵 Even / 🟡 Odd', value: 'Payout: **1:1**', inline: true },
-                    { name: '⬇️ Low(1-18) / ⬆️ High(19-36)', value: 'Payout: **1:1**', inline: true },
-                    { name: '📦 Dozens (1-12, 13-24, 25-36)', value: 'Payout: **2:1**', inline: true },
-                    { name: '🏛️ Columns (col1, col2, col3)', value: 'Payout: **2:1**', inline: true },
-                    { name: '🔢 Specific Number (0-36)', value: 'Payout: **35:1**', inline: true }
+                    { name: '🌟 Advanced Bets Guide', value: 'You can type combinations!\n`voisins`, `tiers`, `orphelins`\n`nb <num> <dist>` (e.g. `nb 0 2`)\n`split 5,8`\n`corner 1,2,4,5`\n`sixline 1,2,3,4,5,6`', inline: false }
                 )
                 .setFooter({ text: `The Dealer is waiting for bets... • Total Server Spins: ${spinHistory.length}` });
 
@@ -305,13 +278,13 @@ async function runRouletteLoop(channel, client, guildId) {
                     const betTypeInput = new TextInputBuilder()
                         .setCustomId('bet_type')
                         .setLabel("What are you betting on?")
-                        .setPlaceholder("Red, Black, Even, Odd, 1-18, 19-36, col1, 1-12...")
+                        .setPlaceholder("red, 17, voisins, nb 0 2, split 5,8")
                         .setStyle(TextInputStyle.Short)
                         .setRequired(true);
 
                     const betAmountInput = new TextInputBuilder()
                         .setCustomId('bet_amount')
-                        .setLabel("How much cash?")
+                        .setLabel("Chip Size?")
                         .setPlaceholder("e.g. 500")
                         .setStyle(TextInputStyle.Short)
                         .setRequired(true);
@@ -321,25 +294,75 @@ async function runRouletteLoop(channel, client, guildId) {
 
                     try {
                         const modalSubmit = await i.awaitModalSubmit({ filter: (mi) => mi.customId === `bet_modal_${i.id}` && mi.user.id === i.user.id, time: 45000 });
-                        const rawType = modalSubmit.fields.getTextInputValue('bet_type').toLowerCase().replace(/\s/g, '');
+                        const rawTypeRaw = modalSubmit.fields.getTextInputValue('bet_type').toLowerCase().trim();
                         const rawAmount = parseInt(modalSubmit.fields.getTextInputValue('bet_amount'));
 
-                        if (isNaN(rawAmount) || rawAmount <= 0) return modalSubmit.reply({ content: '❌ Invalid bet amount!', ephemeral: true });
+                        if (isNaN(rawAmount) || rawAmount <= 0) return modalSubmit.reply({ content: '❌ Invalid chip amount!', ephemeral: true });
 
-                        const userData = await getEconomyData(client, guildId, i.user.id);
-                        if ((userData.wallet || 0) < rawAmount) return modalSubmit.reply({ content: `❌ Not enough cash! Balance: **$${(userData.wallet || 0).toLocaleString()}**`, ephemeral: true });
+                        let type = rawTypeRaw;
+                        let parsedBet = null;
+                        let cost = rawAmount;
+                        let isAdvanced = false;
+                        let advancedNums = [];
+                        let multiplier = 0;
 
-                        const validWords = ['red', 'black', 'even', 'odd', '1-18', '19-36', '1-12', '13-24', '25-36', 'col1', 'col2', 'col3'];
-                        const isNumber = !isNaN(parseInt(rawType)) && parseInt(rawType) >= 0 && parseInt(rawType) <= 36;
-                        
-                        if (!validWords.includes(rawType) && !isNumber) {
-                            return modalSubmit.reply({ content: "❌ Invalid bet! Use terms like 'red', 'even', '1-18', 'col1', '13-24', or '17'.", ephemeral: true });
+                        const baseValid = ['red', 'black', 'even', 'odd', '1-18', '19-36', '1-12', '13-24', '25-36', 'col1', 'col2', 'col3'];
+                        const typeNoSpace = type.replace(/\s/g, '');
+
+                        // Parse the bet
+                        if (baseValid.includes(typeNoSpace)) {
+                            parsedBet = typeNoSpace;
+                        } else if (!isNaN(typeNoSpace) && parseInt(typeNoSpace) >= 0 && parseInt(typeNoSpace) <= 36) {
+                            parsedBet = parseInt(typeNoSpace).toString();
+                        } else if (type === 'voisins') {
+                            parsedBet = 'voisins'; cost = rawAmount * 17; isAdvanced = true; advancedNums = [22, 18, 29, 7, 28, 12, 35, 3, 26, 0, 32, 15, 19, 4, 21, 2, 25]; multiplier = 36;
+                        } else if (type === 'tiers') {
+                            parsedBet = 'tiers'; cost = rawAmount * 12; isAdvanced = true; advancedNums = [27, 13, 36, 11, 30, 8, 23, 10, 5, 24, 16, 33]; multiplier = 36;
+                        } else if (type === 'orphelins') {
+                            parsedBet = 'orphelins'; cost = rawAmount * 8; isAdvanced = true; advancedNums = [1, 20, 14, 31, 9, 17, 34, 6]; multiplier = 36;
+                        } else if (type.startsWith('nb') || type.startsWith('neighbour')) {
+                            const parts = type.match(/[0-9]+/g);
+                            if (parts && parts.length === 2) {
+                                const target = parseInt(parts[0]);
+                                const dist = parseInt(parts[1]);
+                                if (target >= 0 && target <= 36 && dist >= 1 && dist <= 5) {
+                                    const idx = WHEEL_ORDER.indexOf(target);
+                                    for(let k = -dist; k <= dist; k++) { let x = (idx + k) % 37; if(x < 0) x += 37; advancedNums.push(WHEEL_ORDER[x]); }
+                                    parsedBet = `nb-${target}-${dist}`; cost = rawAmount * advancedNums.length; isAdvanced = true; multiplier = 36;
+                                }
+                            }
+                        } else if (type.startsWith('split')) {
+                            const parts = type.match(/[0-9]+/g);
+                            if (parts && parts.length === 2) { parsedBet = `split-${parts.join('-')}`; isAdvanced = true; advancedNums = parts.map(Number); multiplier = 18; cost = rawAmount; }
+                        } else if (type.startsWith('corner')) {
+                            const parts = type.match(/[0-9]+/g);
+                            if (parts && parts.length === 4) { parsedBet = `corner-${parts.join('-')}`; isAdvanced = true; advancedNums = parts.map(Number); multiplier = 9; cost = rawAmount; }
+                        } else if (type.startsWith('sixline')) {
+                            const parts = type.match(/[0-9]+/g);
+                            if (parts && parts.length === 6) { parsedBet = `sixline-${parts.join('-')}`; isAdvanced = true; advancedNums = parts.map(Number); multiplier = 6; cost = rawAmount; }
                         }
 
-                        await EconomyService.removeMoney(client, guildId, i.user.id, rawAmount, `Roulette Bet: ${rawType}`);
-                        currentBets.push({ userId: i.user.id, userTag: i.user.tag, type: rawType, amount: rawAmount });
+                        if (!parsedBet) {
+                            return modalSubmit.reply({ content: "❌ Invalid bet! Check formatting (e.g. `voisins`, `split 5,8`, `nb 0 2`, `red`).", ephemeral: true });
+                        }
 
-                        await modalSubmit.reply({ content: `✅ Bet Accepted! **$${rawAmount.toLocaleString()}** on **${rawType.toUpperCase()}**.`, ephemeral: true });
+                        const userData = await getEconomyData(client, guildId, i.user.id);
+                        if ((userData.wallet || 0) < cost) return modalSubmit.reply({ content: `❌ Not enough cash! Your balance: **$${(userData.wallet || 0).toLocaleString()}** | Bet cost: **$${cost.toLocaleString()}**`, ephemeral: true });
+
+                        await EconomyService.removeMoney(client, guildId, i.user.id, cost, `Roulette Bet: ${parsedBet}`);
+                        
+                        currentBets.push({ 
+                            userId: i.user.id, 
+                            userTag: i.user.tag, 
+                            type: parsedBet, 
+                            cost: cost, 
+                            chipSize: rawAmount, 
+                            isAdvanced: isAdvanced, 
+                            advancedNums: advancedNums, 
+                            multiplier: multiplier 
+                        });
+
+                        await modalSubmit.reply({ content: `✅ Bet Accepted! **$${cost.toLocaleString()}** deducted for **${parsedBet.toUpperCase()}**.`, ephemeral: true });
                     } catch (err) { }
                 }
             });
@@ -351,9 +374,7 @@ async function runRouletteLoop(channel, client, guildId) {
 
             betButton.components[0].setDisabled(true);
 
-            // ===============================================
             // Generate Winner EARLY for Dashboard Sync
-            // ===============================================
             const winningNumber = Math.floor(Math.random() * 37);
             const state = liveRouletteState.get(guildId);
             if (state) {
@@ -387,26 +408,34 @@ async function runRouletteLoop(channel, client, guildId) {
             let winners = [];
 
             for (const bet of currentBets) {
-                let won = false; let multiplier = 0;
+                let won = false; let payout = 0;
 
-                if (bet.type === 'red' && isRed) { won = true; multiplier = 2; }
-                else if (bet.type === 'black' && isBlack) { won = true; multiplier = 2; }
-                else if (bet.type === 'even' && isEven) { won = true; multiplier = 2; }
-                else if (bet.type === 'odd' && isOdd) { won = true; multiplier = 2; }
-                else if (bet.type === '1-18' && winningNumber >= 1 && winningNumber <= 18) { won = true; multiplier = 2; }
-                else if (bet.type === '19-36' && winningNumber >= 19 && winningNumber <= 36) { won = true; multiplier = 2; }
-                else if (bet.type === '1-12' && winningNumber >= 1 && winningNumber <= 12) { won = true; multiplier = 3; }
-                else if (bet.type === '13-24' && winningNumber >= 13 && winningNumber <= 24) { won = true; multiplier = 3; }
-                else if (bet.type === '25-36' && winningNumber >= 25 && winningNumber <= 36) { won = true; multiplier = 3; }
-                else if (bet.type === 'col1' && winningNumber !== 0 && winningNumber % 3 === 1) { won = true; multiplier = 3; }
-                else if (bet.type === 'col2' && winningNumber !== 0 && winningNumber % 3 === 2) { won = true; multiplier = 3; }
-                else if (bet.type === 'col3' && winningNumber !== 0 && winningNumber % 3 === 0) { won = true; multiplier = 3; }
-                else if (parseInt(bet.type) === winningNumber) { won = true; multiplier = 36; }
+                if (bet.isAdvanced) {
+                    if (bet.advancedNums.includes(winningNumber)) {
+                        won = true; payout = bet.chipSize * bet.multiplier;
+                    }
+                } else {
+                    let mult = 0;
+                    if (bet.type === 'red' && isRed) { won = true; mult = 2; }
+                    else if (bet.type === 'black' && isBlack) { won = true; mult = 2; }
+                    else if (bet.type === 'even' && isEven) { won = true; mult = 2; }
+                    else if (bet.type === 'odd' && isOdd) { won = true; mult = 2; }
+                    else if (bet.type === '1-18' && winningNumber >= 1 && winningNumber <= 18) { won = true; mult = 2; }
+                    else if (bet.type === '19-36' && winningNumber >= 19 && winningNumber <= 36) { won = true; mult = 2; }
+                    else if (bet.type === '1-12' && winningNumber >= 1 && winningNumber <= 12) { won = true; mult = 3; }
+                    else if (bet.type === '13-24' && winningNumber >= 13 && winningNumber <= 24) { won = true; mult = 3; }
+                    else if (bet.type === '25-36' && winningNumber >= 25 && winningNumber <= 36) { won = true; mult = 3; }
+                    else if (bet.type === 'col1' && winningNumber !== 0 && winningNumber % 3 === 1) { won = true; mult = 3; }
+                    else if (bet.type === 'col2' && winningNumber !== 0 && winningNumber % 3 === 2) { won = true; mult = 3; }
+                    else if (bet.type === 'col3' && winningNumber !== 0 && winningNumber % 3 === 0) { won = true; mult = 3; }
+                    else if (!isNaN(bet.type) && parseInt(bet.type) === winningNumber) { won = true; mult = 36; }
+                    
+                    if (won) payout = bet.cost * mult;
+                }
 
                 if (won) {
-                    const winnings = bet.amount * multiplier;
-                    await EconomyService.addMoney(client, guildId, bet.userId, winnings, 'Roulette Winnings');
-                    winners.push(`🎉 **${bet.userTag}** won **$${winnings.toLocaleString()}** *(Bet: ${bet.type.toUpperCase()})*`);
+                    await EconomyService.addMoney(client, guildId, bet.userId, payout, 'Roulette Winnings');
+                    winners.push(`🎉 **${bet.userTag}** won **$${payout.toLocaleString()}** *(Bet: ${bet.type.toUpperCase()})*`);
                 }
             }
 
