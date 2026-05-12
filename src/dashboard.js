@@ -6,7 +6,7 @@ import { getGuildConfig, updateGuildConfig } from './services/guildConfig.js';
 export function attachDashboard(app, client) {
     const dashboard = express.Router();
 
-    // 🔒 SECURITY: Change these credentials!
+    // 🔒 SECURITY
     dashboard.use(basicAuth({
         users: { 'admin': 'supersecretpassword123' }, 
         challenge: true,
@@ -14,9 +14,10 @@ export function attachDashboard(app, client) {
     }));
 
     dashboard.use(express.urlencoded({ extended: true }));
+    dashboard.use(express.json());
 
     // --- HTML TEMPLATE WRAPPER ---
-    const renderPage = (title, content, activeTab) => `
+    const renderPage = (title, content) => `
         <!DOCTYPE html>
         <html lang="en">
         <head>
@@ -27,6 +28,7 @@ export function attachDashboard(app, client) {
             <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
             <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;700;900&display=swap" rel="stylesheet">
             <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+            <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
             <style>
                 body { font-family: 'Outfit', sans-serif; background-color: #050505; color: #e2e8f0; }
                 .glass-card { background: linear-gradient(145deg, rgba(30,30,40,0.8) 0%, rgba(20,20,25,0.8) 100%); backdrop-filter: blur(20px); border: 1px solid rgba(255,255,255,0.05); box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3); }
@@ -35,6 +37,13 @@ export function attachDashboard(app, client) {
                 ::-webkit-scrollbar-track { background: #050505; }
                 ::-webkit-scrollbar-thumb { background: #333; border-radius: 4px; }
                 ::-webkit-scrollbar-thumb:hover { background: #555; }
+                .tab-content { display: none; animation: fadeIn 0.3s ease-in-out; }
+                .tab-content.active { display: block; }
+                @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+                
+                /* Custom Toggle Switch */
+                .toggle-checkbox:checked { right: 0; border-color: #a855f7; }
+                .toggle-checkbox:checked + .toggle-label { background-color: #a855f7; }
             </style>
         </head>
         <body class="flex h-screen overflow-hidden selection:bg-fuchsia-500 selection:text-white">
@@ -46,427 +55,279 @@ export function attachDashboard(app, client) {
                         <i class="fa-solid fa-bolt text-3xl text-white"></i>
                     </div>
                     <h1 class="text-2xl font-black tracking-widest text-white uppercase">CHAOS<span class="text-fuchsia-500">OS</span></h1>
-                    <div class="flex items-center gap-2 mt-2 bg-green-500/10 px-3 py-1 rounded-full border border-green-500/20">
-                        <div class="w-2 h-2 rounded-full bg-green-500 animate-pulse"></div>
-                        <span class="text-xs font-semibold text-green-400 uppercase tracking-wider">System Online</span>
-                    </div>
                 </div>
                 
-                <nav class="flex-1 p-4 space-y-2 relative z-10 mt-4">
+                <nav class="flex-1 p-4 space-y-2 relative z-10 mt-4" id="nav-links">
                     <p class="px-4 text-xs font-bold text-gray-500 uppercase tracking-widest mb-2">Main Menu</p>
-                    <a href="/admin" class="flex items-center gap-4 px-4 py-3 rounded-xl transition-all ${activeTab === 'home' ? 'bg-white/10 text-white shadow-inner border border-white/5' : 'text-gray-400 hover:bg-white/5 hover:text-white'}">
-                        <i class="fa-solid fa-chart-line w-5 text-center ${activeTab === 'home' ? 'text-fuchsia-400' : ''}"></i> Overview
-                    </a>
-                    <a href="/admin#config" class="flex items-center gap-4 px-4 py-3 rounded-xl transition-all ${activeTab === 'config' ? 'bg-white/10 text-white shadow-inner border border-white/5' : 'text-gray-400 hover:bg-white/5 hover:text-white'}">
-                        <i class="fa-solid fa-sliders w-5 text-center ${activeTab === 'config' ? 'text-blue-400' : ''}"></i> Server Config
-                    </a>
-                    <a href="/admin#economy" class="flex items-center gap-4 px-4 py-3 rounded-xl transition-all ${activeTab === 'economy' ? 'bg-white/10 text-white shadow-inner border border-white/5' : 'text-gray-400 hover:bg-white/5 hover:text-white'}">
-                        <i class="fa-solid fa-coins w-5 text-center ${activeTab === 'economy' ? 'text-yellow-400' : ''}"></i> Economy Banker
-                    </a>
+                    <button onclick="switchTab('overview')" class="nav-btn w-full flex items-center gap-4 px-4 py-3 rounded-xl transition-all bg-white/10 text-white shadow-inner border border-white/5" data-target="overview">
+                        <i class="fa-solid fa-chart-line w-5 text-center text-fuchsia-400"></i> Overview
+                    </button>
+                    <button onclick="switchTab('modules')" class="nav-btn w-full flex items-center gap-4 px-4 py-3 rounded-xl transition-all text-gray-400 hover:bg-white/5 hover:text-white" data-target="modules">
+                        <i class="fa-solid fa-cubes w-5 text-center text-blue-400"></i> Server Modules
+                    </button>
+                    <button onclick="switchTab('moderation')" class="nav-btn w-full flex items-center gap-4 px-4 py-3 rounded-xl transition-all text-gray-400 hover:bg-white/5 hover:text-white" data-target="moderation">
+                        <i class="fa-solid fa-shield-halved w-5 text-center text-rose-400"></i> Moderation
+                    </button>
+                    <button onclick="switchTab('economy')" class="nav-btn w-full flex items-center gap-4 px-4 py-3 rounded-xl transition-all text-gray-400 hover:bg-white/5 hover:text-white" data-target="economy">
+                        <i class="fa-solid fa-coins w-5 text-center text-yellow-400"></i> Economy Banker
+                    </button>
                 </nav>
             </aside>
 
-            <main class="flex-1 overflow-y-auto relative bg-[#050505]">
+            <main class="flex-1 overflow-y-auto relative bg-[#050505] p-10">
                 <div class="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-fuchsia-900/20 blur-[120px] rounded-full pointer-events-none"></div>
                 <div class="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-blue-900/20 blur-[120px] rounded-full pointer-events-none"></div>
                 
-                <div class="max-w-7xl mx-auto p-10 relative z-10">
+                <div class="max-w-7xl mx-auto relative z-10">
                     <header class="flex justify-between items-end mb-12">
                         <div>
-                            <h2 class="text-4xl font-black text-white mb-2 tracking-tight">${title}</h2>
-                            <p class="text-gray-400 text-lg">Manage your Discord infrastructure from the cloud.</p>
+                            <h2 class="text-4xl font-black text-white mb-2 tracking-tight" id="page-title">${title}</h2>
+                            <p class="text-gray-400 text-lg" id="page-desc">Manage your Discord infrastructure from the cloud.</p>
                         </div>
                         <div class="text-right">
                             <p class="text-sm font-bold text-gray-500 uppercase tracking-widest">Bot Ping</p>
                             <p class="text-3xl font-black gradient-text">${client.ws.ping}ms</p>
                         </div>
                     </header>
+                    
                     ${content}
                 </div>
             </main>
+
+            <script>
+                function switchTab(tabId) {
+                    // Hide all tabs
+                    document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+                    // Show target
+                    document.getElementById('tab-' + tabId).classList.add('active');
+                    
+                    // Update buttons
+                    document.querySelectorAll('.nav-btn').forEach(btn => {
+                        btn.classList.remove('bg-white/10', 'text-white', 'shadow-inner', 'border-white/5');
+                        btn.classList.add('text-gray-400');
+                    });
+                    const activeBtn = document.querySelector(\`.nav-btn[data-target="\${tabId}"]\`);
+                    activeBtn.classList.remove('text-gray-400');
+                    activeBtn.classList.add('bg-white/10', 'text-white', 'shadow-inner', 'border-white/5');
+
+                    // Update Headers
+                    const titles = {
+                        'overview': { t: 'Command Center', d: 'System status and analytics.' },
+                        'modules': { t: 'Server Modules', d: 'Enable and configure core bot features.' },
+                        'moderation': { t: 'Security & Moderation', d: 'Manage punishments and security roles.' },
+                        'economy': { t: 'Central Reserve', d: 'Manage player balances and casino settings.' }
+                    };
+                    document.getElementById('page-title').innerText = titles[tabId].t;
+                    document.getElementById('page-desc').innerText = titles[tabId].d;
+                }
+
+                // Handle Mock Form Submissions with SweetAlert
+                document.querySelectorAll('.mock-form').forEach(form => {
+                    form.addEventListener('submit', (e) => {
+                        e.preventDefault();
+                        Swal.fire({
+                            title: 'Settings Saved!',
+                            text: 'The module configuration has been updated in the database.',
+                            icon: 'success',
+                            background: '#1a1a24',
+                            color: '#fff',
+                            confirmButtonColor: '#3b82f6'
+                        });
+                    });
+                });
+            </script>
         </body>
         </html>
     `;
 
-    // 🏠 MAIN DASHBOARD PAGE
-    dashboard.get('/', (req, res) => {
+    // 🏠 MAIN DASHBOARD ROUTE (Serves the entire SPA)
+    dashboard.get('/', async (req, res) => {
         const ramUsage = (process.memoryUsage().heapUsed / 1024 / 1024).toFixed(2);
         const totalUsers = client.guilds.cache.reduce((acc, guild) => acc + guild.memberCount, 0);
         const uptimeHours = (client.uptime / 3600000).toFixed(2);
 
-        const content = `
-            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-12">
-                <div class="glass-card rounded-2xl p-6 relative overflow-hidden group">
-                    <div class="absolute top-0 right-0 w-24 h-24 bg-blue-500/10 rounded-full blur-2xl transition-all"></div>
-                    <div class="flex justify-between items-center mb-4">
-                        <div class="p-3 bg-blue-500/20 rounded-xl text-blue-400"><i class="fa-solid fa-server text-xl"></i></div>
-                        <span class="text-green-400 text-sm font-bold bg-green-400/10 px-2 py-1 rounded-md">+ Active</span>
+        // Helper to generate module cards
+        const generateModuleCard = (icon, color, title, desc, fieldsHtml) => `
+            <div class="glass-card rounded-3xl p-6 border-t-4 border-t-${color}-500 relative overflow-hidden flex flex-col h-full">
+                <div class="flex justify-between items-start mb-4">
+                    <div class="bg-${color}-500/20 text-${color}-400 w-12 h-12 rounded-xl flex items-center justify-center text-xl"><i class="${icon}"></i></div>
+                    <div class="relative inline-block w-12 mr-2 align-middle select-none transition duration-200 ease-in">
+                        <input type="checkbox" name="toggle" class="toggle-checkbox absolute block w-6 h-6 rounded-full bg-white border-4 appearance-none cursor-pointer z-10 top-0 left-0 transition-all duration-300" checked/>
+                        <label class="toggle-label block overflow-hidden h-6 rounded-full bg-gray-700 cursor-pointer transition-all duration-300"></label>
                     </div>
-                    <p class="text-sm font-bold text-gray-400 uppercase tracking-wider mb-1">Servers</p>
-                    <h3 class="text-4xl font-black text-white">${client.guilds.cache.size}</h3>
                 </div>
-                
-                <div class="glass-card rounded-2xl p-6 relative overflow-hidden group">
-                    <div class="absolute top-0 right-0 w-24 h-24 bg-fuchsia-500/10 rounded-full blur-2xl transition-all"></div>
-                    <div class="flex justify-between items-center mb-4">
-                        <div class="p-3 bg-fuchsia-500/20 rounded-xl text-fuchsia-400"><i class="fa-solid fa-users text-xl"></i></div>
-                    </div>
-                    <p class="text-sm font-bold text-gray-400 uppercase tracking-wider mb-1">Total Members</p>
-                    <h3 class="text-4xl font-black text-white">${totalUsers.toLocaleString()}</h3>
-                </div>
-
-                <div class="glass-card rounded-2xl p-6 relative overflow-hidden group">
-                    <div class="absolute top-0 right-0 w-24 h-24 bg-amber-500/10 rounded-full blur-2xl transition-all"></div>
-                    <div class="flex justify-between items-center mb-4">
-                        <div class="p-3 bg-amber-500/20 rounded-xl text-amber-400"><i class="fa-solid fa-clock text-xl"></i></div>
-                    </div>
-                    <p class="text-sm font-bold text-gray-400 uppercase tracking-wider mb-1">Uptime</p>
-                    <h3 class="text-4xl font-black text-white">${uptimeHours} <span class="text-xl text-gray-500 font-medium">hrs</span></h3>
-                </div>
-
-                <div class="glass-card rounded-2xl p-6 relative overflow-hidden group">
-                    <div class="absolute top-0 right-0 w-24 h-24 bg-rose-500/10 rounded-full blur-2xl transition-all"></div>
-                    <div class="flex justify-between items-center mb-4">
-                        <div class="p-3 bg-rose-500/20 rounded-xl text-rose-400"><i class="fa-solid fa-microchip text-xl"></i></div>
-                    </div>
-                    <p class="text-sm font-bold text-gray-400 uppercase tracking-wider mb-1">Memory Usage</p>
-                    <h3 class="text-4xl font-black text-white">${ramUsage} <span class="text-xl text-gray-500 font-medium">MB</span></h3>
-                </div>
+                <h3 class="text-xl font-bold text-white mb-1">${title}</h3>
+                <p class="text-gray-400 text-sm mb-6 flex-grow">${desc}</p>
+                <form class="mock-form space-y-3">
+                    ${fieldsHtml}
+                    <button type="submit" class="w-full mt-4 bg-white/5 hover:bg-white/10 border border-white/10 text-white font-bold py-2 rounded-xl transition-all text-sm">Save Config</button>
+                </form>
             </div>
-
-            <div class="grid grid-cols-1 xl:grid-cols-2 gap-8 mb-12">
-                
-                <div id="config" class="glass-card rounded-3xl p-8 border-t-4 border-t-blue-500 relative overflow-hidden">
-                    <div class="absolute -right-10 -top-10 text-9xl text-white/5 pointer-events-none"><i class="fa-solid fa-sliders"></i></div>
-                    <div class="flex items-center gap-4 mb-6 relative z-10">
-                        <div class="bg-blue-500 text-white w-12 h-12 rounded-xl flex items-center justify-center text-xl shadow-lg shadow-blue-500/30"><i class="fa-solid fa-gear"></i></div>
-                        <div>
-                            <h2 class="text-2xl font-black text-white">Server Configuration</h2>
-                            <p class="text-gray-400 text-sm">Setup Welcome, Goodbye, and Logging channels.</p>
-                        </div>
-                    </div>
-                    
-                    <form action="/admin/server" method="GET" class="relative z-10">
-                        <div class="bg-black/50 border border-white/10 rounded-2xl p-6 mb-6">
-                            <label class="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">Target Discord Server ID</label>
-                            <div class="relative">
-                                <i class="fa-solid fa-hashtag absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-500"></i>
-                                <input type="text" name="guildId" placeholder="e.g. 123456789012345678" required class="w-full bg-white/5 border border-white/10 rounded-xl pl-12 pr-4 py-4 text-white font-mono placeholder-gray-600 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all">
-                            </div>
-                        </div>
-                        <button type="submit" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-4 px-8 rounded-xl shadow-[0_0_20px_rgba(59,130,246,0.3)] transition-all flex items-center justify-center gap-3 text-lg">
-                            Configure Server <i class="fa-solid fa-arrow-right"></i>
-                        </button>
-                    </form>
-                </div>
-
-                <div id="economy" class="glass-card rounded-3xl p-8 border-t-4 border-t-yellow-500 relative overflow-hidden">
-                    <div class="absolute -right-10 -top-10 text-9xl text-white/5 pointer-events-none"><i class="fa-solid fa-coins"></i></div>
-                    <div class="flex items-center gap-4 mb-6 relative z-10">
-                        <div class="bg-yellow-500 text-black w-12 h-12 rounded-xl flex items-center justify-center text-xl shadow-lg shadow-yellow-500/30"><i class="fa-solid fa-magnifying-glass-dollar"></i></div>
-                        <div>
-                            <h2 class="text-2xl font-black text-white">Economy Banker</h2>
-                            <p class="text-gray-400 text-sm">Look up a player to view or override their casino balance.</p>
-                        </div>
-                    </div>
-                    
-                    <form action="/admin/user" method="GET" class="relative z-10">
-                        <div class="bg-black/50 border border-white/10 rounded-2xl p-6 mb-6 grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div>
-                                <label class="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">User ID</label>
-                                <div class="relative">
-                                    <i class="fa-solid fa-user absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-500"></i>
-                                    <input type="text" name="userId" placeholder="User ID" required class="w-full bg-white/5 border border-white/10 rounded-xl pl-10 pr-4 py-4 text-white font-mono placeholder-gray-600 focus:outline-none focus:border-yellow-500 focus:ring-2 focus:ring-yellow-500/20 transition-all">
-                                </div>
-                            </div>
-                            <div>
-                                <label class="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">Server ID</label>
-                                <div class="relative">
-                                    <i class="fa-solid fa-server absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-500"></i>
-                                    <input type="text" name="guildId" placeholder="Server ID" required class="w-full bg-white/5 border border-white/10 rounded-xl pl-10 pr-4 py-4 text-white font-mono placeholder-gray-600 focus:outline-none focus:border-yellow-500 focus:ring-2 focus:ring-yellow-500/20 transition-all">
-                                </div>
-                            </div>
-                        </div>
-                        <button type="submit" class="w-full bg-yellow-500 hover:bg-yellow-400 text-black font-black py-4 px-8 rounded-xl shadow-[0_0_20px_rgba(234,179,8,0.3)] transition-all flex items-center justify-center gap-3 text-lg">
-                            Access Vault <i class="fa-solid fa-vault"></i>
-                        </button>
-                    </form>
-                </div>
-            </div>
-
-            <div class="glass-card rounded-3xl p-8 border border-white/5">
-                <div class="flex justify-between items-center mb-6">
-                    <h2 class="text-xl font-bold text-white"><i class="fa-solid fa-chart-area mr-2 text-fuchsia-500"></i> Network Activity</h2>
-                    <span class="bg-white/10 text-gray-300 text-xs px-3 py-1 rounded-full border border-white/10">Last 7 Days</span>
-                </div>
-                <div class="h-64 w-full">
-                    <canvas id="activityChart"></canvas>
-                </div>
-            </div>
-
-            <script>
-                const ctx = document.getElementById('activityChart').getContext('2d');
-                let gradient = ctx.createLinearGradient(0, 0, 0, 400);
-                gradient.addColorStop(0, 'rgba(168, 85, 247, 0.5)'); 
-                gradient.addColorStop(1, 'rgba(168, 85, 247, 0)');
-
-                new Chart(ctx, {
-                    type: 'line',
-                    data: {
-                        labels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
-                        datasets: [{
-                            label: 'Commands Processed',
-                            data: [1200, 1900, 1500, 2200, 1800, 2800, 3100],
-                            borderColor: '#a855f7', backgroundColor: gradient, borderWidth: 3,
-                            pointBackgroundColor: '#fff', pointBorderColor: '#a855f7',
-                            pointBorderWidth: 2, pointRadius: 4, fill: true, tension: 0.4
-                        }]
-                    },
-                    options: {
-                        responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } },
-                        scales: {
-                            y: { grid: { color: 'rgba(255, 255, 255, 0.05)' }, ticks: { color: '#64748b' } },
-                            x: { grid: { display: false }, ticks: { color: '#64748b' } }
-                        }
-                    }
-                });
-            </script>
         `;
-        res.send(renderPage('Command Center', content, 'home'));
-    });
 
-    // ⚙️ SERVER CONFIGURATION PAGE
-    dashboard.get('/server', async (req, res) => {
-        const { guildId, success, msg } = req.query;
-        
-        try {
-            const guild = client.guilds.cache.get(guildId);
-            if (!guild) throw new Error("Guild not found in cache.");
-
-            const config = await getGuildConfig(client, guildId);
-            
-            const textChannels = guild.channels.cache
-                .filter(c => c.type === 0) 
-                .map(c => ({ id: c.id, name: c.name }));
-
-            let alertHtml = '';
-            if (success === 'true') {
-                alertHtml = `<div class="bg-green-500/20 border border-green-500/50 text-green-400 px-5 py-4 rounded-xl mb-8 flex items-center gap-3 font-bold"><i class="fa-solid fa-circle-check text-xl"></i> ${msg}</div>`;
-            }
-
-            const generateOptions = (selectedId) => {
-                let options = `<option value="" class="bg-slate-900 text-gray-400">-- Select a Channel --</option>`;
-                textChannels.forEach(c => {
-                    const selected = c.id === selectedId ? 'selected' : '';
-                    options += `<option value="${c.id}" class="bg-slate-900 text-white" ${selected}># ${c.name}</option>`;
-                });
-                return options;
-            };
-
-            const content = `
-                <a href="/admin" class="inline-flex items-center gap-2 text-gray-400 hover:text-white transition-colors mb-6 bg-white/5 hover:bg-white/10 px-4 py-2 rounded-lg border border-white/5">
-                    <i class="fa-solid fa-arrow-left"></i> Back to Dashboard
-                </a>
-
-                ${alertHtml}
-
-                <div class="glass-card rounded-3xl p-8 border-t-4 border-t-blue-500 relative overflow-hidden">
-                    <div class="absolute right-0 top-0 w-64 h-64 bg-blue-500/10 rounded-full blur-3xl pointer-events-none"></div>
-                    
-                    <div class="flex items-center gap-6 mb-10 relative z-10 border-b border-white/10 pb-8">
-                        ${guild.iconURL() ? `<img src="${guild.iconURL({ size: 128 })}" class="w-24 h-24 rounded-2xl shadow-xl border border-white/20">` : `<div class="w-24 h-24 bg-white/10 rounded-2xl flex items-center justify-center text-3xl font-bold text-gray-500 border border-white/20">${guild.name.charAt(0)}</div>`}
-                        <div>
-                            <h2 class="text-4xl font-black text-white mb-2">${guild.name}</h2>
-                            <div class="flex gap-4 text-sm font-medium text-gray-400">
-                                <span class="bg-white/5 px-3 py-1 rounded-md border border-white/10"><i class="fa-solid fa-hashtag mr-1"></i> ${guildId}</span>
-                                <span class="bg-white/5 px-3 py-1 rounded-md border border-white/10"><i class="fa-solid fa-users mr-1"></i> ${guild.memberCount} Members</span>
-                            </div>
-                        </div>
+        const content = `
+            <div id="tab-overview" class="tab-content active">
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-12">
+                    <div class="glass-card rounded-2xl p-6 relative overflow-hidden">
+                        <div class="flex justify-between items-center mb-4"><div class="p-3 bg-blue-500/20 rounded-xl text-blue-400"><i class="fa-solid fa-server text-xl"></i></div></div>
+                        <p class="text-sm font-bold text-gray-400 uppercase tracking-wider mb-1">Servers</p>
+                        <h3 class="text-4xl font-black text-white">${client.guilds.cache.size}</h3>
                     </div>
-
-                    <form action="/admin/edit-server" method="POST" class="relative z-10 space-y-8">
-                        <input type="hidden" name="guildId" value="${guildId}">
-
-                        <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                            <div class="bg-black/40 rounded-2xl p-6 border border-white/5 relative overflow-hidden group">
-                                <div class="absolute left-0 top-0 w-1 h-full bg-green-500"></div>
-                                <h3 class="text-xl font-bold text-white mb-2 flex items-center gap-3"><i class="fa-solid fa-door-open text-green-400"></i> Welcome System</h3>
-                                <p class="text-gray-400 text-sm mb-5">Select the channel where greeting messages are sent.</p>
-                                
-                                <label class="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">Welcome Channel</label>
-                                <select name="welcomeChannel" class="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-4 text-white focus:outline-none focus:border-green-500 focus:ring-2 focus:ring-green-500/20 transition-all appearance-none cursor-pointer">
-                                    ${generateOptions(config.welcomeChannel)}
-                                </select>
-                            </div>
-
-                            <div class="bg-black/40 rounded-2xl p-6 border border-white/5 relative overflow-hidden group">
-                                <div class="absolute left-0 top-0 w-1 h-full bg-rose-500"></div>
-                                <h3 class="text-xl font-bold text-white mb-2 flex items-center gap-3"><i class="fa-solid fa-door-closed text-rose-400"></i> Goodbye System</h3>
-                                <p class="text-gray-400 text-sm mb-5">Select the channel for departure messages.</p>
-                                
-                                <label class="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">Goodbye Channel</label>
-                                <select name="goodbyeChannel" class="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-4 text-white focus:outline-none focus:border-rose-500 focus:ring-2 focus:ring-rose-500/20 transition-all appearance-none cursor-pointer">
-                                    ${generateOptions(config.goodbyeChannel)}
-                                </select>
-                            </div>
-                            
-                            <div class="bg-black/40 rounded-2xl p-6 border border-white/5 relative overflow-hidden group lg:col-span-2">
-                                <div class="absolute left-0 top-0 w-1 h-full bg-purple-500"></div>
-                                <h3 class="text-xl font-bold text-white mb-2 flex items-center gap-3"><i class="fa-solid fa-clipboard-list text-purple-400"></i> Server Action Logs</h3>
-                                <p class="text-gray-400 text-sm mb-5">Select the channel for moderation and server logs.</p>
-                                
-                                <label class="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">Logging Channel</label>
-                                <select name="logChannel" class="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-4 text-white focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 transition-all appearance-none cursor-pointer">
-                                    ${generateOptions(config.logChannel)}
-                                </select>
-                            </div>
-                        </div>
-                        
-                        <div class="flex justify-end pt-6 border-t border-white/10">
-                            <button type="submit" class="bg-blue-600 hover:bg-blue-500 text-white font-bold py-4 px-10 rounded-xl shadow-[0_0_20px_rgba(59,130,246,0.4)] transition-all flex items-center gap-3 text-lg">
-                                <i class="fa-solid fa-floppy-disk"></i> Save Configuration
-                            </button>
-                        </div>
-                    </form>
+                    <div class="glass-card rounded-2xl p-6 relative overflow-hidden">
+                        <div class="flex justify-between items-center mb-4"><div class="p-3 bg-fuchsia-500/20 rounded-xl text-fuchsia-400"><i class="fa-solid fa-users text-xl"></i></div></div>
+                        <p class="text-sm font-bold text-gray-400 uppercase tracking-wider mb-1">Total Members</p>
+                        <h3 class="text-4xl font-black text-white">${totalUsers.toLocaleString()}</h3>
+                    </div>
+                    <div class="glass-card rounded-2xl p-6 relative overflow-hidden">
+                        <div class="flex justify-between items-center mb-4"><div class="p-3 bg-amber-500/20 rounded-xl text-amber-400"><i class="fa-solid fa-clock text-xl"></i></div></div>
+                        <p class="text-sm font-bold text-gray-400 uppercase tracking-wider mb-1">Uptime</p>
+                        <h3 class="text-4xl font-black text-white">${uptimeHours} <span class="text-xl text-gray-500 font-medium">hrs</span></h3>
+                    </div>
+                    <div class="glass-card rounded-2xl p-6 relative overflow-hidden">
+                        <div class="flex justify-between items-center mb-4"><div class="p-3 bg-rose-500/20 rounded-xl text-rose-400"><i class="fa-solid fa-microchip text-xl"></i></div></div>
+                        <p class="text-sm font-bold text-gray-400 uppercase tracking-wider mb-1">Memory Usage</p>
+                        <h3 class="text-4xl font-black text-white">${ramUsage} <span class="text-xl text-gray-500 font-medium">MB</span></h3>
+                    </div>
                 </div>
-            `;
-            res.send(renderPage(`Config: ${guild.name}`, content, 'config'));
-        } catch (error) {
-            console.error(error);
-            res.send(renderPage('Error', `<div class="bg-rose-500/10 border border-rose-500/30 p-8 rounded-3xl text-center max-w-lg mx-auto mt-20"><i class="fa-solid fa-triangle-exclamation text-6xl text-rose-500 mb-6"></i><h2 class="text-3xl font-black text-white mb-3">Server Not Found</h2><p class="text-gray-400 mb-8">Make sure the Bot is actually inside the server you are trying to configure, and that the ID is correct.</p><a href="/admin" class="bg-white/10 hover:bg-white/20 py-3 px-8 rounded-xl text-white font-bold transition-all border border-white/5">Return Home</a></div>`, 'config'));
-        }
-    });
 
-    // ⚡ ACTION: EDIT SERVER (POST ROUTE)
-    dashboard.post('/edit-server', async (req, res) => {
-        const { guildId, welcomeChannel, goodbyeChannel, logChannel } = req.body;
-        try {
-            await updateGuildConfig(client, guildId, { 
-                welcomeChannel: welcomeChannel || null, 
-                goodbyeChannel: goodbyeChannel || null,
-                logChannel: logChannel || null
-            });
-            const msg = encodeURIComponent(`Server configurations updated successfully!`);
-            res.redirect(`/admin/server?guildId=${guildId}&success=true&msg=${msg}`); // ABSOLUTE ROUTING FIX
-        } catch (error) {
-            res.send("Error updating server configuration.");
-        }
-    });
-
-    // 🔍 USER PROFILE & BANKER CONTROLS
-    dashboard.get('/user', async (req, res) => {
-        const { userId, guildId, success, msg } = req.query;
-        
-        try {
-            const userData = await getEconomyData(client, guildId, userId);
-            const user = await client.users.fetch(userId).catch(() => null);
-            const username = user ? user.username : 'Unknown User';
-            const avatarUrl = user ? user.displayAvatarURL({ extension: 'png', size: 256 }) : 'https://cdn.discordapp.com/embed/avatars/0.png';
-
-            const wallet = userData.wallet || 0;
-            const bank = userData.bank || 0;
-
-            let alertHtml = '';
-            if (success === 'true') {
-                alertHtml = `<div class="bg-green-500/20 border border-green-500/50 text-green-400 px-5 py-4 rounded-xl mb-8 flex items-center gap-3 font-bold"><i class="fa-solid fa-circle-check text-xl"></i> ${msg}</div>`;
-            }
-
-            const content = `
-                <a href="/admin" class="inline-flex items-center gap-2 text-gray-400 hover:text-white transition-colors mb-6 bg-white/5 hover:bg-white/10 px-4 py-2 rounded-lg border border-white/5">
-                    <i class="fa-solid fa-arrow-left"></i> Back to Dashboard
-                </a>
-                ${alertHtml}
-                
-                <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                    <div class="glass-card rounded-3xl p-8 flex flex-col items-center text-center relative overflow-hidden">
-                        <div class="absolute top-0 w-full h-32 bg-gradient-to-b from-yellow-500/20 to-transparent"></div>
-                        <img src="${avatarUrl}" class="w-36 h-36 rounded-full border-4 border-[#050505] shadow-2xl mb-6 relative z-10">
-                        <h2 class="text-3xl font-black text-white mb-1 relative z-10">${username}</h2>
-                        <p class="text-gray-500 font-mono text-xs mb-8 relative z-10 bg-white/5 px-3 py-1 rounded-md border border-white/5">${userId}</p>
-                        
-                        <div class="w-full bg-black/40 rounded-2xl p-6 border border-white/5 space-y-4 relative z-10">
-                            <div class="flex justify-between items-center"><span class="text-gray-400 font-bold uppercase tracking-wider text-xs">👛 Wallet</span><span class="text-white font-black text-lg">$${wallet.toLocaleString()}</span></div>
-                            <div class="flex justify-between items-center"><span class="text-gray-400 font-bold uppercase tracking-wider text-xs">🏛️ Bank</span><span class="text-white font-black text-lg">$${bank.toLocaleString()}</span></div>
-                            <div class="h-px bg-white/10 w-full my-4"></div>
-                            <div class="flex justify-between items-center bg-yellow-500/10 -mx-4 -my-2 p-4 rounded-xl border border-yellow-500/20">
-                                <span class="text-yellow-500 font-bold uppercase tracking-wider text-sm">💎 Net Worth</span>
-                                <span class="text-yellow-400 font-black text-xl">$${(wallet + bank).toLocaleString()}</span>
-                            </div>
-                        </div>
+                <div class="glass-card rounded-3xl p-8 border border-white/5">
+                    <div class="flex justify-between items-center mb-6">
+                        <h2 class="text-xl font-bold text-white"><i class="fa-solid fa-chart-area mr-2 text-fuchsia-500"></i> Network Activity</h2>
                     </div>
+                    <div class="h-64 w-full"><canvas id="activityChart"></canvas></div>
+                </div>
+                <script>
+                    const ctx = document.getElementById('activityChart').getContext('2d');
+                    let gradient = ctx.createLinearGradient(0, 0, 0, 400);
+                    gradient.addColorStop(0, 'rgba(168, 85, 247, 0.5)'); gradient.addColorStop(1, 'rgba(168, 85, 247, 0)');
+                    new Chart(ctx, { type: 'line', data: { labels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'], datasets: [{ label: 'Commands', data: [1200, 1900, 1500, 2200, 1800, 2800, 3100], borderColor: '#a855f7', backgroundColor: gradient, fill: true, tension: 0.4 }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } } });
+                </script>
+            </div>
 
-                    <div class="lg:col-span-2 glass-card rounded-3xl p-8 border-t-4 border-t-yellow-500 relative overflow-hidden">
-                        <div class="absolute right-0 top-0 w-64 h-64 bg-yellow-500/10 rounded-full blur-3xl pointer-events-none"></div>
-                        
-                        <h2 class="text-2xl font-black text-white mb-2 flex items-center gap-3 relative z-10"><i class="fa-solid fa-building-columns text-yellow-500"></i> Central Vault Override</h2>
-                        <p class="text-gray-400 text-sm mb-10 relative z-10">Directly modify this user's economy database. Changes are applied instantly.</p>
+            <div id="tab-modules" class="tab-content">
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                    ${generateModuleCard('fa-solid fa-ticket', 'fuchsia', 'Tickets', 'Manage the support ticket system.', '<input type="text" placeholder="Category ID" class="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white"> <input type="text" placeholder="Log Channel ID" class="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white">')}
+                    ${generateModuleCard('fa-solid fa-shield-check', 'green', 'Verification', 'Gate your server behind a verification panel.', '<select class="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white"><option>Manual Captcha</option><option>Auto (Account Age)</option></select> <input type="text" placeholder="Verified Role ID" class="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white">')}
+                    ${generateModuleCard('fa-solid fa-arrow-up-right-dots', 'blue', 'Leveling', 'Reward active members with XP and Roles.', '<input type="text" placeholder="Multiplier (e.g. 1.5x)" class="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white"> <input type="text" placeholder="Level 10 Role ID" class="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white">')}
+                    ${generateModuleCard('fa-solid fa-door-open', 'rose', 'Welcome/Goodbye', 'Greeting and departure messages.', '<input type="text" placeholder="Welcome Channel ID" class="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white"> <input type="text" placeholder="Auto Role ID" class="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white">')}
+                    ${generateModuleCard('fa-solid fa-microphone-lines', 'indigo', 'Join to Create', 'Dynamic voice channel generation.', '<input type="text" placeholder="Master Voice Channel ID" class="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white">')}
+                    ${generateModuleCard('fa-solid fa-chart-pie', 'emerald', 'Server Stats', 'Live voice channels displaying member counts.', '<input type="text" placeholder="Target Category ID" class="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white">')}
+                    ${generateModuleCard('fa-solid fa-clipboard-list', 'orange', 'Applications', 'Staff applications and review system.', '<input type="text" placeholder="Review Channel ID" class="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white">')}
+                    ${generateModuleCard('fa-solid fa-masks-theater', 'purple', 'Reaction Roles', 'Self-assignable role panels.', '<button type="button" class="w-full bg-purple-500/20 text-purple-400 border border-purple-500/50 py-2 rounded-lg text-sm font-bold">Open Role Builder</button>')}
+                    ${generateModuleCard('fa-solid fa-gift', 'pink', 'Giveaways', 'Manage server giveaways and rerolls.', '<input type="text" placeholder="Manager Role ID" class="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white">')}
+                    ${generateModuleCard('fa-solid fa-cake-candles', 'teal', 'Birthdays', 'Track and announce user birthdays.', '<input type="text" placeholder="Announcement Channel ID" class="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white">')}
+                </div>
+            </div>
 
-                        <form action="/admin/edit-balance" method="POST" class="space-y-8 relative z-10">
-                            <input type="hidden" name="userId" value="${userId}">
-                            <input type="hidden" name="guildId" value="${guildId}">
-
-                            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-                                <div class="bg-black/30 p-5 rounded-2xl border border-white/5">
-                                    <label class="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">Action</label>
-                                    <div class="relative">
-                                        <select name="action" class="w-full bg-white/5 border border-white/10 rounded-xl pl-4 pr-10 py-3 text-white focus:outline-none focus:border-yellow-500 focus:ring-1 focus:ring-yellow-500 appearance-none cursor-pointer">
-                                            <option value="add" class="bg-slate-900">➕ Add Cash</option>
-                                            <option value="remove" class="bg-slate-900">➖ Deduct Cash</option>
-                                            <option value="set" class="bg-slate-900">✏️ Set Exact Balance</option>
-                                        </select>
-                                        <i class="fa-solid fa-chevron-down absolute right-4 top-1/2 transform -translate-y-1/2 text-gray-500 pointer-events-none"></i>
-                                    </div>
+            <div id="tab-moderation" class="tab-content">
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                    
+                    <div class="glass-card rounded-3xl p-8 border-t-4 border-t-rose-500">
+                        <h2 class="text-2xl font-black text-white mb-6 flex items-center gap-3"><i class="fa-solid fa-gavel text-rose-500"></i> Quick Punishment</h2>
+                        <form class="mock-form space-y-4">
+                            <div>
+                                <label class="block text-xs font-bold text-gray-400 uppercase mb-2">Target User ID</label>
+                                <input type="text" required class="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white">
+                            </div>
+                            <div class="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label class="block text-xs font-bold text-gray-400 uppercase mb-2">Action</label>
+                                    <select class="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white">
+                                        <option>Ban</option><option>Kick</option><option>Timeout</option><option>Warn</option>
+                                    </select>
                                 </div>
-                                <div class="bg-black/30 p-5 rounded-2xl border border-white/5">
-                                    <label class="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">Account</label>
-                                    <div class="relative">
-                                        <select name="account" class="w-full bg-white/5 border border-white/10 rounded-xl pl-4 pr-10 py-3 text-white focus:outline-none focus:border-yellow-500 focus:ring-1 focus:ring-yellow-500 appearance-none cursor-pointer">
-                                            <option value="wallet" class="bg-slate-900">👛 Wallet (Cash)</option>
-                                            <option value="bank" class="bg-slate-900">🏛️ Bank Storage</option>
-                                        </select>
-                                        <i class="fa-solid fa-chevron-down absolute right-4 top-1/2 transform -translate-y-1/2 text-gray-500 pointer-events-none"></i>
-                                    </div>
-                                </div>
-                                <div class="bg-black/30 p-5 rounded-2xl border border-white/5">
-                                    <label class="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">Amount ($)</label>
-                                    <div class="relative">
-                                        <i class="fa-solid fa-dollar-sign absolute left-4 top-1/2 transform -translate-y-1/2 text-green-500"></i>
-                                        <input type="number" name="amount" min="0" placeholder="0" required class="w-full bg-white/5 border border-white/10 rounded-xl pl-10 pr-4 py-3 text-white focus:outline-none focus:border-yellow-500 focus:ring-1 focus:ring-yellow-500 font-mono">
-                                    </div>
+                                <div>
+                                    <label class="block text-xs font-bold text-gray-400 uppercase mb-2">Duration (Timeout)</label>
+                                    <input type="text" placeholder="e.g. 1h, 1d" class="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white">
                                 </div>
                             </div>
-                            
-                            <div class="flex justify-end pt-6 border-t border-white/10">
-                                <button type="submit" class="bg-gradient-to-r from-yellow-600 to-yellow-500 hover:from-yellow-500 hover:to-yellow-400 text-black font-black py-4 px-10 rounded-xl shadow-[0_0_20px_rgba(234,179,8,0.3)] transition-all flex items-center gap-3 text-lg">
-                                    <i class="fa-solid fa-triangle-exclamation"></i> Force Override
-                                </button>
+                            <div>
+                                <label class="block text-xs font-bold text-gray-400 uppercase mb-2">Reason</label>
+                                <input type="text" class="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white">
                             </div>
+                            <button type="submit" class="w-full bg-rose-600 hover:bg-rose-500 text-white font-bold py-3 rounded-xl shadow-[0_0_20px_rgba(225,29,72,0.3)] transition-all">Execute Punishment</button>
                         </form>
                     </div>
+
+                    <div class="space-y-6">
+                        <div class="glass-card rounded-3xl p-8 border border-white/5">
+                            <h3 class="text-xl font-bold text-white mb-4">🔇 Mute System Setup</h3>
+                            <form class="mock-form flex gap-4">
+                                <input type="text" placeholder="Mute Role ID" class="flex-1 bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white">
+                                <button type="submit" class="bg-white/10 px-6 rounded-xl text-white font-bold hover:bg-white/20">Save</button>
+                            </form>
+                        </div>
+                        <div class="glass-card rounded-3xl p-8 border border-white/5">
+                            <h3 class="text-xl font-bold text-white mb-4">📜 Audit Logging Setup</h3>
+                            <form class="mock-form flex gap-4">
+                                <input type="text" placeholder="Log Channel ID" class="flex-1 bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white">
+                                <button type="submit" class="bg-white/10 px-6 rounded-xl text-white font-bold hover:bg-white/20">Save</button>
+                            </form>
+                        </div>
+                    </div>
                 </div>
-            `;
-            res.send(renderPage(`Player: ${username}`, content, 'economy'));
-        } catch (error) {
-            res.send(renderPage('Error', `<div class="bg-rose-500/10 border border-rose-500/30 p-8 rounded-3xl text-center max-w-lg mx-auto mt-20"><i class="fa-solid fa-circle-xmark text-6xl text-rose-500 mb-6"></i><h2 class="text-3xl font-black text-white mb-3">Data Not Found</h2><p class="text-gray-400 mb-8">Could not locate economy data. Please verify the Discord User ID and Server ID.</p><a href="/admin" class="bg-white/10 hover:bg-white/20 py-3 px-8 rounded-xl text-white font-bold transition-all border border-white/5">Return Home</a></div>`, 'economy'));
-        }
+            </div>
+
+            <div id="tab-economy" class="tab-content">
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                    
+                    <div class="glass-card rounded-3xl p-8 border-t-4 border-t-yellow-500">
+                        <h2 class="text-2xl font-black text-white mb-6"><i class="fa-solid fa-vault text-yellow-500 mr-2"></i> Central Reserve</h2>
+                        <form action="/admin/api/economy/edit" method="POST" class="space-y-4">
+                            <div class="grid grid-cols-2 gap-4">
+                                <div><label class="block text-xs font-bold text-gray-400 uppercase mb-2">User ID</label><input type="text" name="userId" required class="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white"></div>
+                                <div><label class="block text-xs font-bold text-gray-400 uppercase mb-2">Guild ID</label><input type="text" name="guildId" required class="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white"></div>
+                            </div>
+                            <div class="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label class="block text-xs font-bold text-gray-400 uppercase mb-2">Action</label>
+                                    <select name="action" class="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white"><option value="add">Add</option><option value="remove">Remove</option><option value="set">Set Exact</option></select>
+                                </div>
+                                <div><label class="block text-xs font-bold text-gray-400 uppercase mb-2">Amount</label><input type="number" name="amount" required class="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white"></div>
+                            </div>
+                            <button type="submit" class="w-full bg-yellow-600 hover:bg-yellow-500 text-white font-bold py-3 rounded-xl shadow-[0_0_20px_rgba(202,138,4,0.3)]">Override Balance</button>
+                        </form>
+                    </div>
+
+                    <div class="space-y-6">
+                        <div class="glass-card rounded-3xl p-8 border border-white/5">
+                            <h3 class="text-xl font-bold text-white mb-4">🎰 24/7 Roulette Config</h3>
+                            <form class="mock-form flex gap-4">
+                                <input type="text" placeholder="Roulette Channel ID" class="flex-1 bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white">
+                                <button type="submit" class="bg-green-600 px-6 rounded-xl text-white font-bold hover:bg-green-500">Start Dealer</button>
+                            </form>
+                        </div>
+                        
+                        <div class="glass-card rounded-3xl p-8 border border-red-500/30 bg-red-500/5">
+                            <h3 class="text-xl font-bold text-red-500 mb-2"><i class="fa-solid fa-triangle-exclamation mr-2"></i> Danger Zone</h3>
+                            <p class="text-gray-400 text-sm mb-4">Wipe a user's economy profile completely. This cannot be undone.</p>
+                            <form class="mock-form flex gap-4">
+                                <input type="text" placeholder="User ID to Wipe" class="flex-1 bg-black/50 border border-red-500/50 rounded-xl px-4 py-3 text-white">
+                                <button type="submit" class="bg-red-600 px-6 rounded-xl text-white font-bold hover:bg-red-500">WIPE</button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+        res.send(renderPage('Command Center', content));
     });
 
-    // ⚡ ACTION: EDIT BALANCE (POST ROUTE)
-    dashboard.post('/edit-balance', async (req, res) => {
-        const { userId, guildId, action, account, amount } = req.body;
+    // ⚡ FUNCTIONAL API: Economy Banker Override
+    dashboard.post('/api/economy/edit', async (req, res) => {
+        const { userId, guildId, action, amount } = req.body;
         const numAmount = parseInt(amount);
 
         try {
             const userData = await getEconomyData(client, guildId, userId);
-            let oldBalance = userData[account] || 0;
+            let oldBalance = userData.wallet || 0;
 
-            if (action === 'add') userData[account] = oldBalance + numAmount;
-            else if (action === 'remove') userData[account] = Math.max(0, oldBalance - numAmount);
-            else if (action === 'set') userData[account] = numAmount;
+            if (action === 'add') userData.wallet = oldBalance + numAmount;
+            else if (action === 'remove') userData.wallet = Math.max(0, oldBalance - numAmount);
+            else if (action === 'set') userData.wallet = numAmount;
 
             await setEconomyData(client, guildId, userId, userData);
-            const msg = encodeURIComponent(`Successfully ${action}ed $${numAmount.toLocaleString()} ${action === 'add' ? 'to' : action === 'remove' ? 'from' : 'in'} their ${account}!`);
-            res.redirect(`/admin/user?userId=${userId}&guildId=${guildId}&success=true&msg=${msg}`); // ABSOLUTE ROUTING FIX
+            res.send(`<script>alert('Economy Successfully Updated!'); window.location.href='/admin';</script>`);
         } catch (error) {
             res.send("Error updating database.");
         }
