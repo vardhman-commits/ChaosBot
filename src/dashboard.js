@@ -9,7 +9,6 @@ import { startPersistentRoulettes, liveRouletteState } from './commands/Economy/
 export function attachDashboard(app, client) {
     const dashboard = express.Router();
 
-    // 🔒 SECURITY
     dashboard.use(basicAuth({ users: { 'admin': 'supersecretpassword123' }, challenge: true }));
     dashboard.use(express.urlencoded({ extended: true }));
     dashboard.use(express.json());
@@ -17,6 +16,10 @@ export function attachDashboard(app, client) {
     const renderPage = (client, guild, config) => {
         const textChannels = guild.channels.cache.filter(c => c.type === 0).sort((a,b) => a.position - b.position).map(c => ({ id: c.id, label: `# ${c.name}` }));
         const voiceChannels = guild.channels.cache.filter(c => c.type === 2).sort((a,b) => a.position - b.position).map(c => ({ id: c.id, label: `🔊 ${c.name}` }));
+        
+        // FIXED: Re-added the categories variable!
+        const categories = guild.channels.cache.filter(c => c.type === 4).sort((a,b) => a.position - b.position).map(c => ({ id: c.id, label: `📁 ${c.name}` }));
+        
         const roles = guild.roles.cache.sort((a,b) => b.position - a.position).map(r => ({ id: r.id, label: `@ ${r.name}` }));
 
         const buildSelect = (name, optionsList, selectedId, placeholder) => {
@@ -272,7 +275,7 @@ export function attachDashboard(app, client) {
                                     <div class="bg-black/50 p-4 rounded-xl border border-white/5 flex flex-col justify-center">
                                         <h4 class="text-sm font-bold text-orange-400 uppercase tracking-widest mb-2"><i class="fa-solid fa-puzzle-piece mr-1"></i> Split & Corner Bets</h4>
                                         <p class="text-xs text-gray-400 leading-relaxed">
-                                            Hover over the grid lines and borders between the numbers on the board above. Click the highlighted intersections to instantly place <b>Splits</b>, <b>Corners</b>, and <b>Six Line</b> chips.
+                                            Simply <span class="text-white font-bold">hover over the grid lines and borders</span> between the numbers on the board above. Click directly on the intersections to instantly drop <b>Splits</b>, <b>Corners</b>, and <b>Six Line</b> chips exactly like a real casino!
                                         </p>
                                     </div>
                                 </div>
@@ -431,7 +434,7 @@ export function attachDashboard(app, client) {
                 let activeBets = {}; 
                 let lastBets = {};
                 let demoHistoryLog = [];
-                let currentCasinoHistory = []; // Track globally for popups
+                let currentCasinoHistory = [];
 
                 // --- TAB NAVIGATION ---
                 function switchTab(tabId) {
@@ -457,7 +460,7 @@ export function attachDashboard(app, client) {
                     let html = '<div class="grid grid-cols-10 gap-2 max-h-60 overflow-y-auto p-2">';
                     currentCasinoHistory.forEach(n => {
                         let colorClass = n === 0 ? 'bg-green-600' : (redNumbers.includes(n) ? 'bg-red-600' : 'bg-gray-800');
-                        html += \`<div class="\${colorClass} text-white font-bold py-1 rounded shadow text-sm border border-white/20">\${n}</div>\`;
+                        html += \`<div class="\${colorClass} text-white font-bold py-1 rounded shadow text-sm border border-white/20 text-center">\${n}</div>\`;
                     });
                     html += '</div>';
 
@@ -899,7 +902,7 @@ export function attachDashboard(app, client) {
         res.send(renderPage(client, guild, config));
     });
 
-    // Casino Sync Route 
+    // Casino Sync Route
     dashboard.get('/api/casino/live', async (req, res) => {
         const guildId = req.query.guildId;
         const state = liveRouletteState.get(guildId);
