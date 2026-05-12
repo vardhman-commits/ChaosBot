@@ -12,6 +12,9 @@ const RED_NUMBERS = [1, 3, 5, 7, 9, 12, 14, 16, 18, 19, 21, 23, 25, 27, 30, 32, 
 const activeRouletteServers = new Set();
 const globalSpinHistory = new Map();
 
+// ADDED THIS: The dashboard reads this map to sync the UI!
+export const liveRouletteState = new Map(); 
+
 // --- LIVE TABLE ANALYTICS ENGINE ---
 function getTableStats(history) {
     const data = history.slice(-100); 
@@ -139,6 +142,7 @@ export default {
                 await updateGuildConfig(client, guildId, { rouletteChannel: null });
                 activeRouletteServers.delete(guildId);
                 globalSpinHistory.delete(guildId);
+                liveRouletteState.delete(guildId); // Clear dashboard sync
                 return interaction.reply({ content: '🛑 **Roulette Disabled.** The dealer will finish their current spin and leave the server.', ephemeral: true });
             }
 
@@ -248,8 +252,20 @@ async function runRouletteLoop(channel, client, guildId) {
             }
 
             let currentBets = [];
-            let spinHistory = globalSpinHistory.get(guildId);
+            let spinHistory = globalSpinHistory.get(guildId) || [];
             const stats = getTableStats(spinHistory);
+
+            // ===============================================
+            // ADDED: Setup Dashboard Sync (Timer & Betting)
+            // ===============================================
+            let timeLeft = 60;
+            liveRouletteState.set(guildId, { status: 'betting', timeRemaining: timeLeft, winningNumber: null, history: spinHistory });
+            
+            const timerInterval = setInterval(() => {
+                timeLeft--;
+                const state = liveRouletteState.get(guildId);
+                if (state) state.timeRemaining = timeLeft;
+            }, 1000);
 
             const tableArt = `
 🟢 **0**
@@ -343,19 +359,34 @@ async function runRouletteLoop(channel, client, guildId) {
 
             await new Promise(resolve => collector.on('end', resolve));
 
+            // Clean up Dashboard timer
+            clearInterval(timerInterval);
+
             // Stop loop cleanly if it was disabled mid-betting phase
             if (!activeRouletteServers.has(guildId)) break;
 
             betButton.components[0].setDisabled(true);
+
+            // ===============================================
+            // ADDED: Generate Winner EARLY for Dashboard Sync
+            // ===============================================
+            const winningNumber = Math.floor(Math.random() * 37);
+            const state = liveRouletteState.get(guildId);
+            if (state) {
+                state.status = 'spinning';
+                state.winningNumber = winningNumber;
+            }
+
             const spinningEmbed = new EmbedBuilder()
                 .setTitle('🎰 ROULETTE SPINNING... 🎰')
                 .setColor('#f1c40f')
                 .setDescription(`**NO MORE BETS!**\n\nThe Dealer is spinning the wheel...\nTotal Bets Placed: **${currentBets.length}**`);
 
             await gameMessage.edit({ embeds: [spinningEmbed], components: [betButton] });
+            
+            // Wait 8 seconds (Dashboard spins visually during this time)
             await new Promise(resolve => setTimeout(resolve, 8000));
 
-            const winningNumber = Math.floor(Math.random() * 37);
             const isRed = RED_NUMBERS.includes(winningNumber);
             const isBlack = winningNumber !== 0 && !isRed;
             const isEven = winningNumber !== 0 && winningNumber % 2 === 0;
