@@ -12,7 +12,7 @@ const RED_NUMBERS = [1, 3, 5, 7, 9, 12, 14, 16, 18, 19, 21, 23, 25, 27, 30, 32, 
 const activeRouletteServers = new Set();
 const globalSpinHistory = new Map();
 
-// ADDED THIS: The dashboard reads this map to sync the UI!
+// The dashboard reads this map to sync the UI!
 export const liveRouletteState = new Map(); 
 
 // --- LIVE TABLE ANALYTICS ENGINE ---
@@ -21,29 +21,48 @@ function getTableStats(history) {
     
     if (data.length === 0) {
         return {
-            breakdown: "No data yet.",
-            hot: "N/A", 
-            cold: "N/A",
-            historyString: "*No spins recorded yet. The table is fresh!*"
+            breakdown: "No data yet.", oddEven: "N/A", lowHigh: "N/A", dozens: "N/A", columns: "N/A",
+            hot: "N/A", cold: "N/A", historyString: "*No spins recorded yet. The table is fresh!*"
         };
     }
 
     let r = 0, b = 0, g = 0;
+    let odd = 0, even = 0;
+    let low = 0, high = 0;
+    let d1 = 0, d2 = 0, d3 = 0;
+    let c1 = 0, c2 = 0, c3 = 0;
     let freq = {};
     
     data.forEach(num => {
         if (num === 0) g++;
         else if (RED_NUMBERS.includes(num)) r++;
         else b++;
+
+        if (num !== 0 && num % 2 === 0) even++;
+        else if (num !== 0 && num % 2 !== 0) odd++;
+
+        if (num >= 1 && num <= 18) low++;
+        else if (num >= 19 && num <= 36) high++;
+
+        if (num >= 1 && num <= 12) d1++;
+        else if (num >= 13 && num <= 24) d2++;
+        else if (num >= 25 && num <= 36) d3++;
+
+        if (num !== 0 && num % 3 === 1) c1++;
+        else if (num !== 0 && num % 3 === 2) c2++;
+        else if (num !== 0 && num % 3 === 0) c3++;
+
         freq[num] = (freq[num] || 0) + 1;
     });
 
     const total = data.length;
-    const rPct = ((r/total)*100).toFixed(1);
-    const bPct = ((b/total)*100).toFixed(1);
-    const gPct = ((g/total)*100).toFixed(1);
+    const pct = (val) => ((val/total)*100).toFixed(1) + '%';
 
-    const breakdown = `🔴 **Red:** ${r} (${rPct}%)\n⚫ **Black:** ${b} (${bPct}%)\n🟢 **Green:** ${g} (${gPct}%)`;
+    const breakdown = `🔴 **Red:** ${r} (${pct(r)})\n⚫ **Black:** ${b} (${pct(b)})\n🟢 **Green:** ${g} (${pct(g)})`;
+    const oddEven = `🟡 **Odd:** ${odd} (${pct(odd)})\n🔵 **Even:** ${even} (${pct(even)})`;
+    const lowHigh = `⬇️ **1-18:** ${low} (${pct(low)})\n⬆️ **19-36:** ${high} (${pct(high)})`;
+    const dozens = `📦 **1st 12:** ${d1} (${pct(d1)})\n📦 **2nd 12:** ${d2} (${pct(d2)})\n📦 **3rd 12:** ${d3} (${pct(d3)})`;
+    const columns = `🏛️ **Col 1:** ${c1} (${pct(c1)})\n🏛️ **Col 2:** ${c2} (${pct(c2)})\n🏛️ **Col 3:** ${c3} (${pct(c3)})`;
 
     const sorted = Object.entries(freq).sort((a,b) => b[1] - a[1]);
     const hot = sorted.slice(0, 5).map(x => `**${x[0]}**`).join(', ') || "N/A";
@@ -56,18 +75,20 @@ function getTableStats(history) {
         return RED_NUMBERS.includes(num) ? `🔴${num}` : `⚫${num}`;
     }).join(' ');
 
-    return { breakdown, hot, cold, historyString };
+    return { breakdown, oddEven, lowHigh, dozens, columns, hot, cold, historyString };
 }
 
 // --- BOOT PROCESS: WAKE UP THE DEALERS ---
 export async function startPersistentRoulettes(client) {
     try {
-        const query = `SELECT guild_id, config FROM guild_configs WHERE config->>'rouletteChannel' IS NOT NULL;`;
+        // Broadened query to bypass JSONB syntax issues
+        const query = `SELECT guild_id, config FROM guild_configs;`;
         const result = await db.query(query);
 
         for (const row of result.rows) {
             const guildId = row.guild_id;
-            const channelId = row.config.rouletteChannel;
+            const config = row.config || {};
+            const channelId = config.rouletteChannel;
 
             if (channelId && !activeRouletteServers.has(guildId)) {
                 try {
@@ -137,30 +158,25 @@ export default {
 
             const channel = interaction.options.getChannel('channel');
 
-            // DISABLING
             if (!channel) {
                 await updateGuildConfig(client, guildId, { rouletteChannel: null });
                 activeRouletteServers.delete(guildId);
                 globalSpinHistory.delete(guildId);
-                liveRouletteState.delete(guildId); // Clear dashboard sync
+                liveRouletteState.delete(guildId);
                 return interaction.reply({ content: '🛑 **Roulette Disabled.** The dealer will finish their current spin and leave the server.', ephemeral: true });
             }
 
-            // ENABLING / CHANGING
-            if (channel.type !== 0) { // Text Channel
+            if (channel.type !== 0) { 
                 return interaction.reply({ content: '❌ Please select a standard Text Channel.', ephemeral: true });
             }
 
-            // Save to DB
             await updateGuildConfig(client, guildId, { rouletteChannel: channel.id });
 
-            // If it's already running somewhere else, stop it first
             if (activeRouletteServers.has(guildId)) {
                 activeRouletteServers.delete(guildId);
-                await new Promise(resolve => setTimeout(resolve, 1000)); // Brief pause to kill the old loop
+                await new Promise(resolve => setTimeout(resolve, 1000));
             }
 
-            // Start the new loop
             activeRouletteServers.add(guildId);
             if (!globalSpinHistory.has(guildId)) globalSpinHistory.set(guildId, []);
 
@@ -183,53 +199,21 @@ export default {
             const requestedSpins = interaction.options.getInteger('spins');
             const dataToAnalyze = serverHistory.slice(-requestedSpins);
             const actualSpinCount = dataToAnalyze.length;
-
-            let redCount = 0; let blackCount = 0; let greenCount = 0;
-            let evenCount = 0; let oddCount = 0;
-            const numberFrequency = {};
-            const individualSpinsLog = []; 
-
-            for (const num of dataToAnalyze) {
-                if (num === 0) {
-                    greenCount++; individualSpinsLog.push('🟢0');
-                } else if (RED_NUMBERS.includes(num)) {
-                    redCount++; individualSpinsLog.push(`🔴${num}`);
-                } else {
-                    blackCount++; individualSpinsLog.push(`⚫${num}`);
-                }
-
-                if (num !== 0 && num % 2 === 0) evenCount++;
-                else if (num !== 0 && num % 2 !== 0) oddCount++;
-
-                numberFrequency[num] = (numberFrequency[num] || 0) + 1;
-            }
-
-            const redPct = ((redCount / actualSpinCount) * 100).toFixed(1);
-            const blackPct = ((blackCount / actualSpinCount) * 100).toFixed(1);
-            const greenPct = ((greenCount / actualSpinCount) * 100).toFixed(1);
-
-            const sortedNumbers = Object.entries(numberFrequency).sort((a, b) => b[1] - a[1]);
-            const hotNumbers = sortedNumbers.slice(0, 5).map(([num, count]) => `**${num}** (${count}x)`).join(', ') || 'N/A';
-            
-            const allNumbers = Array.from({length: 37}, (_, i) => i);
-            const coldNumbers = allNumbers
-                .map(num => [num, numberFrequency[num] || 0])
-                .sort((a, b) => a[1] - b[1])
-                .slice(0, 5)
-                .map(([num, count]) => `**${num}** (${count}x)`).join(', ');
-
-            const historyBlock = individualSpinsLog.join(' ');
+            const stats = getTableStats(dataToAnalyze);
 
             const embed = new EmbedBuilder()
                 .setTitle(`📊 Roulette Analytics (Last ${actualSpinCount} Spins)`)
                 .setColor('#3498db')
-                .setDescription(`**Individual Spin Log (Oldest ➡️ Newest):**\n\n${historyBlock}`)
+                .setDescription(`**Individual Spin Log (Oldest ➡️ Newest):**\n\n${stats.historyString}`)
                 .addFields(
-                    { name: 'Color Breakdown', value: `🔴 **Red:** ${redCount} (${redPct}%)\n⚫ **Black:** ${blackCount} (${blackPct}%)\n🟢 **Green:** ${greenCount} (${greenPct}%)`, inline: true },
-                    { name: 'Odd / Even', value: `🟡 **Odd:** ${oddCount}\n🔵 **Even:** ${evenCount}`, inline: true },
+                    { name: '🎨 Colors', value: stats.breakdown, inline: true },
+                    { name: '⚖️ Odd / Even', value: stats.oddEven, inline: true },
+                    { name: '📏 Low / High', value: stats.lowHigh, inline: true },
+                    { name: '📦 Dozens', value: stats.dozens, inline: true },
+                    { name: '🏛️ Columns', value: stats.columns, inline: true },
                     { name: '\u200B', value: '\u200B', inline: true }, 
-                    { name: '🔥 Hot Numbers', value: hotNumbers, inline: false },
-                    { name: '🧊 Cold Numbers', value: coldNumbers, inline: false }
+                    { name: '🔥 Hot Numbers', value: stats.hot, inline: true },
+                    { name: '🧊 Cold Numbers', value: stats.cold, inline: true }
                 )
                 .setFooter({ text: 'Data resets when the bot restarts.' });
 
@@ -244,7 +228,6 @@ export default {
 async function runRouletteLoop(channel, client, guildId) {
     while (activeRouletteServers.has(guildId)) {
         try {
-            // Safety check: Has the admin turned off the module mid-spin?
             const currentConfig = await getGuildConfig(client, guildId);
             if (currentConfig.rouletteChannel !== channel.id) {
                 activeRouletteServers.delete(guildId);
@@ -256,7 +239,7 @@ async function runRouletteLoop(channel, client, guildId) {
             const stats = getTableStats(spinHistory);
 
             // ===============================================
-            // ADDED: Setup Dashboard Sync (Timer & Betting)
+            // Dashboard Sync (Timer & Betting)
             // ===============================================
             let timeLeft = 60;
             liveRouletteState.set(guildId, { status: 'betting', timeRemaining: timeLeft, winningNumber: null, history: spinHistory });
@@ -288,9 +271,15 @@ async function runRouletteLoop(channel, client, guildId) {
                 .setColor('#2ecc71')
                 .setDescription(`**Betting is OPEN!** You have **1 Minute** to place your bets.\nClick the button below to play.`)
                 .addFields(
-                    { name: '📊 Last 100 Spins Analytics', value: stats.breakdown, inline: true },
+                    { name: '🎨 Colors', value: stats.breakdown, inline: true },
+                    { name: '⚖️ Odd / Even', value: stats.oddEven, inline: true },
+                    { name: '📏 Low / High', value: stats.lowHigh, inline: true },
+                    { name: '📦 Dozens', value: stats.dozens, inline: true },
+                    { name: '🏛️ Columns', value: stats.columns, inline: true },
+                    { name: '\u200b', value: '\u200b', inline: true },
                     { name: '🔥 Hot Numbers', value: stats.hot, inline: true },
                     { name: '🧊 Cold Numbers', value: stats.cold, inline: true },
+                    { name: '\u200b', value: '\u200b', inline: true },
                     { name: `📜 Spin History (Last ${Math.min(spinHistory.length, 100)})`, value: stats.historyString, inline: false },
                     { name: 'Roulette Board', value: tableArt, inline: false },
                     { name: '🔴 Red / ⚫ Black', value: 'Payout: **1:1**', inline: true },
@@ -359,16 +348,13 @@ async function runRouletteLoop(channel, client, guildId) {
 
             await new Promise(resolve => collector.on('end', resolve));
 
-            // Clean up Dashboard timer
             clearInterval(timerInterval);
-
-            // Stop loop cleanly if it was disabled mid-betting phase
             if (!activeRouletteServers.has(guildId)) break;
 
             betButton.components[0].setDisabled(true);
 
             // ===============================================
-            // ADDED: Generate Winner EARLY for Dashboard Sync
+            // Generate Winner EARLY for Dashboard Sync
             // ===============================================
             const winningNumber = Math.floor(Math.random() * 37);
             const state = liveRouletteState.get(guildId);
