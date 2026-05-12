@@ -2,6 +2,7 @@ import { Events } from "discord.js";
 import { logger, startupLog } from "../utils/logger.js";
 import config from "../config/application.js";
 import { reconcileReactionRoleMessages } from "../services/reactionRoleService.js";
+import { startPersistentRoulettes } from "../commands/Economy/roulette.js";
 
 export default {
   name: Events.ClientReady,
@@ -19,10 +20,12 @@ export default {
       startupLog(
         `Reaction role reconciliation: scanned ${reconciliationSummary.scannedMessages}, removed ${reconciliationSummary.removedMessages}, errors ${reconciliationSummary.errors}`
       );
+
+      // Auto-start 24/7 Roulette Dealers
+      await startPersistentRoulettes(client);
+      
     } catch (error) {
       logger.error("Error in ready event:", error);
     }
   },
 };
-
-
