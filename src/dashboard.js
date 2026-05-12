@@ -9,7 +9,6 @@ import { startPersistentRoulettes, liveRouletteState } from './commands/Economy/
 export function attachDashboard(app, client) {
     const dashboard = express.Router();
 
-    // 🔒 SECURITY
     dashboard.use(basicAuth({ users: { 'admin': 'supersecretpassword123' }, challenge: true }));
     dashboard.use(express.urlencoded({ extended: true }));
     dashboard.use(express.json());
@@ -17,7 +16,6 @@ export function attachDashboard(app, client) {
     const renderPage = (client, guild, config) => {
         const textChannels = guild.channels.cache.filter(c => c.type === 0).sort((a,b) => a.position - b.position).map(c => ({ id: c.id, label: `# ${c.name}` }));
         const voiceChannels = guild.channels.cache.filter(c => c.type === 2).sort((a,b) => a.position - b.position).map(c => ({ id: c.id, label: `🔊 ${c.name}` }));
-        const categories = guild.channels.cache.filter(c => c.type === 4).sort((a,b) => a.position - b.position).map(c => ({ id: c.id, label: `📁 ${c.name}` }));
         const roles = guild.roles.cache.sort((a,b) => b.position - a.position).map(r => ({ id: r.id, label: `@ ${r.name}` }));
 
         const buildSelect = (name, optionsList, selectedId, placeholder) => {
@@ -46,26 +44,33 @@ export function attachDashboard(app, client) {
                 @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
                 input, select { background-color: #09090b !important; }
 
-                /* Casino Styles */
+                /* Casino Board Styles */
                 .roulette-board { display: grid; grid-template-columns: repeat(14, 1fr); gap: 4px; padding: 10px; background-color: #0b4d2a; border-radius: 12px; border: 4px solid #3a200f; box-shadow: inset 0 0 20px rgba(0,0,0,0.8); }
                 .r-cell { position: relative; display: flex; align-items: center; justify-content: center; font-weight: bold; color: white; border: 1px solid rgba(255,255,255,0.2); border-radius: 4px; cursor: pointer; user-select: none; height: 50px; font-size: 1.1rem; transition: opacity 0.2s; }
-                .r-cell:hover { opacity: 0.7; border-color: white; z-index: 10; }
+                .r-cell:hover { opacity: 0.7; border-color: white; z-index: 5; }
                 .r-zero { grid-row: 1 / span 3; background-color: #27ae60; font-size: 1.5rem; }
                 .r-red { background-color: #c0392b; } .r-black { background-color: #1a1a1a; } .r-green { background-color: #27ae60; } .r-transparent { background: transparent; }
                 
-                .chip-token { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 26px; height: 26px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 8px; font-weight: 900; color: white; border: 2px dashed rgba(255,255,255,0.7); box-shadow: 2px 2px 6px rgba(0,0,0,0.8); pointer-events: none; text-shadow: 1px 1px 0 #000; }
+                /* Advanced Betting Hitboxes */
+                .hb-v { position: absolute; top: -6px; left: 10%; width: 80%; height: 8px; z-index: 15; background: rgba(255,255,255,0.0); transition: 0.2s; }
+                .hb-h { position: absolute; top: 10%; right: -6px; width: 8px; height: 80%; z-index: 15; background: rgba(255,255,255,0.0); transition: 0.2s; }
+                .hb-c { position: absolute; top: -6px; right: -6px; width: 12px; height: 12px; z-index: 20; background: rgba(255,255,255,0.0); transition: 0.2s; border-radius: 50%; }
+                .hb-sl { position: absolute; bottom: -6px; right: -6px; width: 12px; height: 12px; z-index: 20; background: rgba(255,255,255,0.0); transition: 0.2s; border-radius: 50%; }
+                .hb-v:hover, .hb-h:hover, .hb-c:hover, .hb-sl:hover { background: rgba(241, 196, 15, 0.8); box-shadow: 0 0 5px #f1c40f; cursor: pointer; }
+
+                /* Chips */
+                .chip-token { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 26px; height: 26px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 8px; font-weight: 900; color: white; border: 2px dashed rgba(255,255,255,0.7); box-shadow: 2px 2px 6px rgba(0,0,0,0.8); pointer-events: none; text-shadow: 1px 1px 0 #000; z-index: 30; }
                 .val-10 { background: #3498db; } .val-100 { background: #9b59b6; } .val-1k { background: #e67e22; } .val-10k { background: #e74c3c; } .val-100k { background: #f1c40f; color: black; text-shadow: none;}
 
                 .selector-chip { width: 50px; height: 50px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 900; border: 3px dashed rgba(255,255,255,0.4); cursor: pointer; transition: all 0.2s; box-shadow: 0 4px 10px rgba(0,0,0,0.4); }
                 .selector-chip.active { transform: scale(1.15) translateY(-5px); border-color: white; box-shadow: 0 10px 20px rgba(0,0,0,0.6); z-index: 10; }
                 
-                /* Wheel Spin Animation CSS */
+                /* Wheel & Win Animation */
                 .wheel-box { width: 140px; height: 140px; border-radius: 50%; border: 6px solid #1a1a1a; background: radial-gradient(circle, #111 0%, #000 100%); display: flex; align-items: center; justify-content: center; box-shadow: 0 0 30px rgba(0,0,0,0.8), inset 0 0 20px rgba(0,0,0,0.9); position: relative; overflow: hidden; transition: all 0.3s ease; flex-shrink: 0; }
                 .wheel-number { font-size: 4rem; font-weight: 900; text-shadow: 0 4px 15px rgba(0,0,0,0.8); z-index: 10; font-variant-numeric: tabular-nums; transition: transform 0.05s ease; }
                 .spinning-glow { box-shadow: 0 0 50px #f1c40f, inset 0 0 30px #e74c3c; border-color: #f1c40f; animation: spinGlow 0.5s linear infinite; }
                 @keyframes spinGlow { 0% { filter: hue-rotate(0deg); transform: scale(1.05); } 100% { filter: hue-rotate(360deg); transform: scale(1.05); } }
 
-                /* Winning Highlight CSS */
                 .win-highlight { animation: pulseWin 0.8s infinite alternate !important; border-color: #f1c40f !important; z-index: 20; color: #f1c40f !important; }
                 @keyframes pulseWin { 0% { box-shadow: 0 0 10px #f1c40f, inset 0 0 10px #f1c40f; } 100% { box-shadow: 0 0 30px #f1c40f, inset 0 0 20px #f1c40f; } }
             </style>
@@ -122,7 +127,7 @@ export function attachDashboard(app, client) {
                             <div class="flex justify-between items-start mb-6">
                                 <div>
                                     <h2 class="text-3xl font-black text-white mb-2 tracking-tight">Live Discord Casino</h2>
-                                    <p class="text-gray-400 max-w-lg mb-2">Synchronized with your server's 24/7 Dealer. Filter stats and place bets using your <span class="bg-red-600 text-white text-xs px-2 py-1 rounded ml-1">DEMO BALANCE</span>.</p>
+                                    <p class="text-gray-400 max-w-lg mb-2">Synchronized with your server's 24/7 Dealer. Place bets using your <span class="bg-red-600 text-white text-xs px-2 py-1 rounded ml-1">DEMO BALANCE</span>.</p>
                                     <p class="text-sm font-bold mt-2" id="casinoStatus"><span class="text-gray-500"><i class="fa-solid fa-spinner fa-spin"></i> Connecting to Discord...</span></p>
                                 </div>
                                 <div class="bg-[#09090b] px-6 py-4 rounded-2xl border border-green-500/30 flex flex-col items-end gap-2 shadow-xl">
@@ -217,7 +222,7 @@ export function attachDashboard(app, client) {
                                 <div id="advOverlay" class="absolute inset-0 bg-black/80 z-20 hidden flex flex-col items-center justify-center rounded-xl backdrop-blur-md">
                                     <p class="text-xl font-black text-white tracking-widest">DEALER OFFLINE</p>
                                 </div>
-                                <div class="bg-black/50 p-4 rounded-xl border border-white/5">
+                                <div class="bg-black/50 p-4 rounded-xl border border-white/5 flex flex-col justify-center">
                                     <h4 class="text-sm font-bold text-blue-400 uppercase tracking-widest mb-3"><i class="fa-solid fa-earth-europe mr-1"></i> French Call Bets</h4>
                                     <div class="flex gap-2 mb-3">
                                         <button data-bet="voisins" onclick="placeCallBet('voisins')" class="flex-1 bg-blue-600/20 text-blue-400 border border-blue-500/50 py-2 rounded-lg hover:bg-blue-600/40 text-[11px] font-bold transition-all">Voisins</button>
@@ -235,27 +240,14 @@ export function attachDashboard(app, client) {
                                         <button onclick="placeNeighbourBet()" class="bg-teal-600/20 text-teal-400 border border-teal-500/50 px-4 py-2 rounded-lg hover:bg-teal-600/40 text-xs font-bold transition-all">Add</button>
                                     </div>
                                 </div>
-
-                                <div class="bg-black/50 p-4 rounded-xl border border-white/5 flex flex-col">
-                                    <h4 class="text-sm font-bold text-orange-400 uppercase tracking-widest mb-3"><i class="fa-solid fa-puzzle-piece mr-1"></i> Advanced Combinations</h4>
-                                    <div class="flex flex-col gap-2 flex-grow justify-center">
-                                        <div class="flex gap-2">
-                                            <input type="text" id="splitInput" placeholder="Split (e.g. 5,8)" class="flex-1 bg-[#09090b] border border-white/10 rounded px-2 py-1 text-white text-xs font-bold">
-                                            <button onclick="placeAdvancedBet('split')" class="bg-orange-600/20 text-orange-400 border border-orange-500/50 px-4 py-1.5 rounded-lg hover:bg-orange-600/40 text-[11px] font-bold transition-all">Add Split</button>
-                                        </div>
-                                        <div class="flex gap-2">
-                                            <input type="text" id="cornerInput" placeholder="Corner (e.g. 1,2,4,5)" class="flex-1 bg-[#09090b] border border-white/10 rounded px-2 py-1 text-white text-xs font-bold">
-                                            <button onclick="placeAdvancedBet('corner')" class="bg-orange-600/20 text-orange-400 border border-orange-500/50 px-4 py-1.5 rounded-lg hover:bg-orange-600/40 text-[11px] font-bold transition-all">Add Corner</button>
-                                        </div>
-                                        <div class="flex gap-2">
-                                            <input type="text" id="sixlineInput" placeholder="Six Line (e.g. 1,2,3,4,5,6)" class="flex-1 bg-[#09090b] border border-white/10 rounded px-2 py-1 text-white text-xs font-bold">
-                                            <button onclick="placeAdvancedBet('sixline')" class="bg-orange-600/20 text-orange-400 border border-orange-500/50 px-4 py-1.5 rounded-lg hover:bg-orange-600/40 text-[11px] font-bold transition-all">Add Six Line</button>
-                                        </div>
-                                    </div>
+                                <div class="bg-black/50 p-4 rounded-xl border border-white/5 flex flex-col justify-center">
+                                    <h4 class="text-sm font-bold text-orange-400 uppercase tracking-widest mb-2"><i class="fa-solid fa-puzzle-piece mr-1"></i> Split & Corner Bets</h4>
+                                    <p class="text-xs text-gray-400 leading-relaxed">
+                                        You no longer need to type combinations!<br><br>
+                                        Simply <span class="text-white font-bold">hover over the grid lines and borders</span> between the numbers on the board above. Click directly on the intersections to instantly place <b>Splits</b>, <b>Corners</b>, and <b>Six Line</b> bets just like a real casino!
+                                    </p>
                                 </div>
                             </div>
-                            
-                            <div id="advancedBetsList" class="mt-4 grid grid-cols-2 md:grid-cols-4 gap-2"></div>
                         </div>
                     </div>
 
@@ -461,7 +453,6 @@ export function attachDashboard(app, client) {
                             el.appendChild(chipEl);
                         }
                     }
-                    renderAdvancedBets();
                     updateDemoUI();
                 }
 
@@ -479,28 +470,10 @@ export function attachDashboard(app, client) {
                     let cost = Object.values(lastBets).reduce((a,b)=>a+b, 0);
                     if(demoBalance < cost) return Swal.fire({title: 'Broke!', text: 'Not enough demo cash.', icon: 'error', background: '#09090b', color: '#fff'});
                     
-                    demoBalance += Object.values(activeBets).reduce((a,b)=>a+b, 0); // refund current unspun bets
+                    demoBalance += Object.values(activeBets).reduce((a,b)=>a+b, 0); 
                     demoBalance -= cost;
                     activeBets = {...lastBets};
                     renderAllChips();
-                }
-
-                function renderAdvancedBets() {
-                    let el = document.getElementById('advancedBetsList');
-                    let html = '';
-                    for(const [k, v] of Object.entries(activeBets)) {
-                        if(['red', 'black', 'even', 'odd', '1-18', '19-36', '1-12', '13-24', '25-36', 'col1', 'col2', 'col3', 'voisins', 'tiers', 'orphelins'].includes(k) || !isNaN(k)) continue; 
-                        let label = k;
-                        if(k.startsWith('neighbour-')) label = \`Neighbours (\${k.split('-')[1]} ±\${k.split('-')[2]})\`;
-                        if(k.startsWith('split-')) label = \`Split (\${k.split('-').slice(1).join(',')})\`;
-                        if(k.startsWith('corner-')) label = \`Corner (\${k.split('-').slice(1).join(',')})\`;
-                        if(k.startsWith('sixline-')) label = \`Six Line (\${k.split('-').slice(1).join(',')})\`;
-
-                        html += \`<div class="bg-white/5 px-3 py-1.5 rounded-lg text-[11px] border border-white/10 flex justify-between">
-                            <span class="text-gray-300 font-bold">\${label}</span> <span class="text-green-400 font-black">$\${v.toLocaleString()}</span>
-                        </div>\`;
-                    }
-                    el.innerHTML = html;
                 }
 
                 function placeBet(type) {
@@ -510,8 +483,15 @@ export function attachDashboard(app, client) {
                 }
 
                 function placeCallBet(type) {
-                    if (demoBalance < selectedChip) return Swal.fire({title: 'Broke!', text: 'Not enough demo cash.', icon: 'error', background: '#09090b', color: '#fff'});
-                    demoBalance -= selectedChip; activeBets[type] = (activeBets[type] || 0) + selectedChip;
+                    let nums = [];
+                    if (type === 'voisins') nums = [22, 18, 29, 7, 28, 12, 35, 3, 26, 0, 32, 15, 19, 4, 21, 2, 25];
+                    if (type === 'tiers') nums = [27, 13, 36, 11, 30, 8, 23, 10, 5, 24, 16, 33];
+                    if (type === 'orphelins') nums = [1, 20, 14, 31, 9, 17, 34, 6];
+
+                    let cost = nums.length * selectedChip;
+                    if (demoBalance < cost) return Swal.fire('Broke!', 'Not enough demo cash for this call bet.', 'error');
+                    demoBalance -= cost;
+                    nums.forEach(n => { activeBets[n.toString()] = (activeBets[n.toString()] || 0) + selectedChip; });
                     renderAllChips();
                 }
 
@@ -519,37 +499,38 @@ export function attachDashboard(app, client) {
                     let target = parseInt(document.getElementById('nbTarget').value);
                     let dist = parseInt(document.getElementById('nbSlider').value);
                     if (isNaN(target) || target < 0 || target > 36) return Swal.fire({title:'Invalid', text:'Enter a valid target number (0-36).', icon:'error', background:'#09090b', color:'#fff'});
-                    if (demoBalance < selectedChip) return Swal.fire({title: 'Broke!', text: 'Not enough demo cash.', icon: 'error', background: '#09090b', color: '#fff'});
-                    demoBalance -= selectedChip;
-                    let betKey = 'neighbour-' + target + '-' + dist;
-                    activeBets[betKey] = (activeBets[betKey] || 0) + selectedChip;
+                    
+                    let idx = wheelOrder.indexOf(target); let nums = [];
+                    for(let k = -dist; k <= dist; k++) { let i = (idx + k) % 37; if(i < 0) i += 37; nums.push(wheelOrder[i]); }
+                    
+                    let cost = nums.length * selectedChip;
+                    if (demoBalance < cost) return Swal.fire({title: 'Broke!', text: 'Not enough demo cash.', icon: 'error', background: '#09090b', color: '#fff'});
+                    demoBalance -= cost;
+                    nums.forEach(n => { activeBets[n.toString()] = (activeBets[n.toString()] || 0) + selectedChip; });
                     renderAllChips();
                 }
 
-                function placeAdvancedBet(type) {
-                    let inputId = type + 'Input';
-                    let val = document.getElementById(inputId).value;
-                    let nums = val.split(',').map(n => parseInt(n.trim())).filter(n => !isNaN(n) && n >= 0 && n <= 36);
-                    
-                    if(type === 'split' && nums.length !== 2) return Swal.fire({title:'Invalid', text:'Split requires exactly 2 numbers separated by a comma (e.g., 5,8).', icon:'error', background:'#09090b', color:'#fff'});
-                    if(type === 'corner' && nums.length !== 4) return Swal.fire({title:'Invalid', text:'Corner requires exactly 4 numbers separated by a comma.', icon:'error', background:'#09090b', color:'#fff'});
-                    if(type === 'sixline' && nums.length !== 6) return Swal.fire({title:'Invalid', text:'Six Line requires exactly 6 numbers separated by a comma.', icon:'error', background:'#09090b', color:'#fff'});
-
-                    if (demoBalance < selectedChip) return Swal.fire({title: 'Broke!', text: 'Not enough demo cash.', icon: 'error', background: '#09090b', color: '#fff'});
-                    demoBalance -= selectedChip;
-                    
-                    let betKey = type + '-' + nums.join('-');
-                    activeBets[betKey] = (activeBets[betKey] || 0) + selectedChip;
-                    renderAllChips(); document.getElementById(inputId).value = '';
+                function getHitboxes(i) {
+                    let html = '';
+                    if (i % 3 !== 0) html += \`<div class="hb-v" data-bet="split-\${i}-\${i+1}" onclick="event.stopPropagation(); placeBet('split-\${i}-\${i+1}')" title="Split \${i},\${i+1}"></div>\`;
+                    if (i <= 33) html += \`<div class="hb-h" data-bet="split-\${i}-\${i+3}" onclick="event.stopPropagation(); placeBet('split-\${i}-\${i+3}')" title="Split \${i},\${i+3}"></div>\`;
+                    if (i % 3 !== 0 && i <= 33) html += \`<div class="hb-c" data-bet="corner-\${i}-\${i+1}-\${i+3}-\${i+4}" onclick="event.stopPropagation(); placeBet('corner-\${i}-\${i+1}-\${i+3}-\${i+4}')" title="Corner \${i},\${i+1},\${i+3},\${i+4}"></div>\`;
+                    if (i % 3 === 1 && i <= 33) html += \`<div class="hb-sl" data-bet="sixline-\${i}-\${i+1}-\${i+2}-\${i+3}-\${i+4}-\${i+5}" onclick="event.stopPropagation(); placeBet('sixline-\${i}-\${i+1}-\${i+2}-\${i+3}-\${i+4}-\${i+5}')" title="Six Line \${i}-\${i+5}"></div>\`;
+                    if (i <= 3) html += \`<div class="hb-h" style="left: -6px; right: auto;" data-bet="split-0-\${i}" onclick="event.stopPropagation(); placeBet('split-0-\${i}')" title="Split 0,\${i}"></div>\`;
+                    if (i === 1) html += \`<div class="hb-c" style="top: -6px; left: -6px; right: auto;" data-bet="corner-0-1-2-3" onclick="event.stopPropagation(); placeBet('corner-0-1-2-3')" title="Corner 0,1,2,3"></div>\`;
+                    return html;
                 }
 
                 function generateBoard() {
                     const boardEl = document.getElementById('rBoard');
                     if (!boardEl) return;
                     let boardHtml = \`<div class="r-cell r-zero" data-bet="0" onclick="placeBet('0')">0</div>\`;
-                    for(let i=3; i<=36; i+=3) boardHtml += \`<div class="r-cell \${redNumbers.includes(i) ? 'r-red' : 'r-black'}" data-bet="\${i}" onclick="placeBet('\${i}')">\${i}</div>\`; boardHtml += \`<div class="r-cell" style="grid-column: 14; grid-row: 1" data-bet="col3" onclick="placeBet('col3')">2:1</div>\`;
-                    for(let i=2; i<=35; i+=3) boardHtml += \`<div class="r-cell \${redNumbers.includes(i) ? 'r-red' : 'r-black'}" data-bet="\${i}" onclick="placeBet('\${i}')">\${i}</div>\`; boardHtml += \`<div class="r-cell" style="grid-column: 14; grid-row: 2" data-bet="col2" onclick="placeBet('col2')">2:1</div>\`;
-                    for(let i=1; i<=34; i+=3) boardHtml += \`<div class="r-cell \${redNumbers.includes(i) ? 'r-red' : 'r-black'}" data-bet="\${i}" onclick="placeBet('\${i}')">\${i}</div>\`; boardHtml += \`<div class="r-cell" style="grid-column: 14; grid-row: 3" data-bet="col1" onclick="placeBet('col1')">2:1</div>\`;
+                    for(let i=3; i<=36; i+=3) boardHtml += \`<div class="r-cell \${redNumbers.includes(i) ? 'r-red' : 'r-black'}" data-bet="\${i}" onclick="placeBet('\${i}')">\${i}\${getHitboxes(i)}</div>\`; 
+                    boardHtml += \`<div class="r-cell" style="grid-column: 14; grid-row: 1" data-bet="col3" onclick="placeBet('col3')">2:1</div>\`;
+                    for(let i=2; i<=35; i+=3) boardHtml += \`<div class="r-cell \${redNumbers.includes(i) ? 'r-red' : 'r-black'}" data-bet="\${i}" onclick="placeBet('\${i}')">\${i}\${getHitboxes(i)}</div>\`; 
+                    boardHtml += \`<div class="r-cell" style="grid-column: 14; grid-row: 2" data-bet="col2" onclick="placeBet('col2')">2:1</div>\`;
+                    for(let i=1; i<=34; i+=3) boardHtml += \`<div class="r-cell \${redNumbers.includes(i) ? 'r-red' : 'r-black'}" data-bet="\${i}" onclick="placeBet('\${i}')">\${i}\${getHitboxes(i)}</div>\`; 
+                    boardHtml += \`<div class="r-cell" style="grid-column: 14; grid-row: 3" data-bet="col1" onclick="placeBet('col1')">2:1</div>\`;
                     boardHtml += \`<div class="r-cell r-transparent" style="grid-column: 1"></div><div class="r-cell" style="grid-column: span 4" data-bet="1-12" onclick="placeBet('1-12')">1st 12</div><div class="r-cell" style="grid-column: span 4" data-bet="13-24" onclick="placeBet('13-24')">2nd 12</div><div class="r-cell" style="grid-column: span 4" data-bet="25-36" onclick="placeBet('25-36')">3rd 12</div>\`;
                     boardHtml += \`<div class="r-cell r-transparent" style="grid-column: 1"></div><div class="r-cell" style="grid-column: span 2" data-bet="1-18" onclick="placeBet('1-18')">1-18</div><div class="r-cell" style="grid-column: span 2" data-bet="even" onclick="placeBet('even')">EVEN</div><div class="r-cell r-red" style="grid-column: span 2" data-bet="red" onclick="placeBet('red')">RED</div><div class="r-cell r-black" style="grid-column: span 2" data-bet="black" onclick="placeBet('black')">BLACK</div><div class="r-cell" style="grid-column: span 2" data-bet="odd" onclick="placeBet('odd')">ODD</div><div class="r-cell" style="grid-column: span 2" data-bet="19-36" onclick="placeBet('19-36')">19-36</div>\`;
                     boardEl.innerHTML += boardHtml;
@@ -629,6 +610,7 @@ export function attachDashboard(app, client) {
                             if (data.status === 'betting') {
                                 if (currentCasinoPhase !== 'betting') { 
                                     currentCasinoPhase = 'betting'; 
+                                    document.querySelectorAll('.win-highlight').forEach(el => el.classList.remove('win-highlight'));
                                     document.getElementById('wheelNumber').style.transform = 'scale(1)'; 
                                     document.getElementById('boardOverlay').classList.add('hidden'); 
                                     document.getElementById('advOverlay').classList.add('hidden'); 
@@ -648,6 +630,7 @@ export function attachDashboard(app, client) {
                     }, 1000);
                 }
 
+                // NEW SPIN ANIMATION
                 async function triggerDashboardSpin(winningNumber) {
                     const wheel = document.getElementById('wheelNumber'); 
                     const wheelBox = document.getElementById('wheelBox');
@@ -695,7 +678,7 @@ export function attachDashboard(app, client) {
                     if([27, 13, 36, 11, 30, 8, 23, 10, 5, 24, 16, 33].includes(winningNumber)) winKeys.push('tiers');
                     if([1, 20, 14, 31, 9, 17, 34, 6].includes(winningNumber)) winKeys.push('orphelins');
 
-                    // Apply Highlights
+                    // Apply Highlights to Board Elements
                     winKeys.forEach(k => {
                         let el = document.querySelector(\`[data-bet="\${k}"]\`);
                         if(el) el.classList.add('win-highlight');
@@ -708,11 +691,10 @@ export function attachDashboard(app, client) {
                         let won = false; let mult = 0;
                         
                         let displayLabel = betType.toUpperCase();
-                        if(betType.startsWith('neighbour-')) displayLabel = \`NB(\${betType.split('-')[1]})\`;
-                        if(betType.startsWith('split-')) displayLabel = \`SPLIT\`;
-                        if(betType.startsWith('corner-')) displayLabel = \`CORNER\`;
-                        if(betType.startsWith('sixline-')) displayLabel = \`SIXLINE\`;
-                        betStrings.push(\`\${displayLabel} (\$\${amt >= 1000 ? (amt/1000)+'k' : amt})\`);
+                        if(betType.startsWith('split-')) displayLabel = \`SPLIT(\${betType.split('-').slice(1).join(',')})\`;
+                        if(betType.startsWith('corner-')) displayLabel = \`CORNER(\${betType.split('-').slice(1).join(',')})\`;
+                        if(betType.startsWith('sixline-')) displayLabel = \`SIXLINE(\${betType.split('-').slice(1).join(',')})\`;
+                        betStrings.push(\`\${displayLabel} ($\${amt >= 1000 ? (amt/1000)+'k' : amt})\`);
                         
                         // Base Bets
                         if (winKeys.includes(betType)) { won = true; }
@@ -727,15 +709,13 @@ export function attachDashboard(app, client) {
                         }
 
                         // Advanced Bets Calculation
-                        if (betType.startsWith('neighbour-')) {
-                            const parts = betType.split('-'); const target = parseInt(parts[1]); const dist = parseInt(parts[2]);
-                            const idx = wheelOrder.indexOf(target); const count = 2 * dist + 1; const covered = [];
-                            for(let k = -dist; k <= dist; k++) { let i = (idx + k) % 37; if(i < 0) i += 37; covered.push(wheelOrder[i]); }
-                            if (covered.includes(winningNumber)) { won = true; mult = 36 / count; }
-                        }
-                        else if (betType.startsWith('split-') || betType.startsWith('corner-') || betType.startsWith('sixline-')) {
+                        if (betType.startsWith('split-') || betType.startsWith('corner-') || betType.startsWith('sixline-')) {
                             const nums = betType.split('-').slice(1).map(Number);
-                            if (nums.includes(winningNumber)) { won = true; mult = 36 / nums.length; }
+                            if (nums.includes(winningNumber)) { 
+                                won = true; mult = 36 / nums.length; 
+                                let el = document.querySelector(\`[data-bet="\${betType}"]\`);
+                                if(el) el.classList.add('win-highlight'); // Highlight winning intersections!
+                            }
                         }
 
                         if (won) totalWon += (amt * mult);
@@ -757,7 +737,7 @@ export function attachDashboard(app, client) {
                     else if (Object.keys(activeBets).length > 0) Swal.fire({title: 'House Wins', text: 'Better luck next time!', icon: 'error', background: '#09090b', color: '#fff', timer: 1500, showConfirmButton: false});
                     
                     activeBets = {}; document.querySelectorAll('.r-chip').forEach(el => el.remove()); 
-                    document.getElementById('advancedBetsList').innerHTML = ''; updateDemoUI();
+                    updateDemoUI();
                 }
 
                 // ================= API CALLS & FORMS =================
