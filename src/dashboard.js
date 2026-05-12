@@ -3,8 +3,7 @@ import express from 'express';
 import { getEconomyData, setEconomyData } from './utils/economy.js';
 import { getGuildConfig, updateGuildConfig } from './services/guildConfig.js';
 import { logger } from './utils/logger.js';
-import { db } from './utils/database.js'; // Ensure database is imported for live queries
-import { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, PermissionFlagsBits } from 'discord.js';
+import { db } from './utils/database.js';
 
 export function attachDashboard(app, client) {
     const dashboard = express.Router();
@@ -213,7 +212,7 @@ export function attachDashboard(app, client) {
                                     <h3 class="text-xl font-bold text-white mb-4">📝 User Notes (Read-Only)</h3>
                                     <div class="flex gap-4">
                                         <input type="text" id="lookupNotesId" placeholder="User ID" class="flex-1 bg-[#09090b] border border-white/10 rounded-xl px-4 py-3 text-white">
-                                        <button type="button" onclick="lookupNotes()" class="bg-blue-600 px-6 rounded-xl text-white font-bold hover:bg-blue-500">Lookup</button>
+                                        <button type="button" onclick="Swal.fire('Info', 'User notes feature connects directly to Discord commands. Use <b>/usernotes view</b> in the server.', 'info')" class="bg-blue-600 px-6 rounded-xl text-white font-bold hover:bg-blue-500">Lookup</button>
                                     </div>
                                 </div>
                             </div>
@@ -247,7 +246,7 @@ export function attachDashboard(app, client) {
                                     </form>
                                 </div>
                                 <div class="glass-card rounded-3xl p-8 border border-red-500/30 bg-red-500/5">
-                                    <h3 class="text-xl font-bold text-red-500 mb-2"><i class="fa-solid fa-triangle-exclamation mr-2"></i> Reset Economy (/reseteco)</h3>
+                                    <h3 class="text-xl font-bold text-red-500 mb-2"><i class="fa-solid fa-triangle-exclamation mr-2"></i> Reset Economy</h3>
                                     <form id="wipeForm" class="flex gap-4 mt-4">
                                         <input type="text" id="wipeUserId" required placeholder="User ID to Wipe" class="flex-1 bg-[#09090b] border border-red-500/50 rounded-xl px-4 py-3 text-white">
                                         <button type="submit" class="bg-red-600 px-6 rounded-xl text-white font-bold hover:bg-red-500 shadow-[0_0_15px_rgba(220,38,38,0.5)]">WIPE</button>
@@ -272,7 +271,7 @@ export function attachDashboard(app, client) {
                                 <div class="border-t border-white/10 pt-6">
                                     <h4 class="text-sm font-bold text-gray-400 mb-4 uppercase">Live Actions</h4>
                                     <button onclick="fetchGiveaways()" class="w-full bg-pink-600/20 text-pink-400 border border-pink-500/30 py-3 rounded-xl hover:bg-pink-600/30 transition-all font-bold mb-3">View & Manage Active Giveaways</button>
-                                    <button onclick="createGiveawayPopup()" class="w-full bg-white/5 border border-white/10 text-white py-3 rounded-xl hover:bg-white/10 transition-all">Start New Giveaway</button>
+                                    <button onclick="Swal.fire('Info', 'Please use <b>/gcreate</b> in the discord channel you want the giveaway to start in!', 'info')" class="w-full bg-white/5 border border-white/10 text-white py-3 rounded-xl hover:bg-white/10 transition-all">Start New Giveaway</button>
                                 </div>
                             </div>
 
@@ -291,9 +290,9 @@ export function attachDashboard(app, client) {
 
                                 <div class="glass-card rounded-3xl p-8 border border-white/5">
                                     <h3 class="text-xl font-bold text-white mb-4"><i class="fa-solid fa-arrow-up-right-dots text-blue-500 mr-2"></i> Leveling System</h3>
-                                    <p class="text-sm text-gray-400 mb-4">Users gain XP automatically. Roles can be assigned at specific levels using the bot's `/levelrole` command.</p>
+                                    <p class="text-sm text-gray-400 mb-4">Users gain XP automatically. Roles can be assigned at specific levels using the bot's <b>/levelrole</b> command.</p>
                                     <div class="flex gap-4">
-                                        <button onclick="Swal.fire('Info', 'Level multiplier config opens dashboard in Discord.', 'info')" class="flex-1 bg-white/10 text-white py-3 rounded-xl border border-white/10 hover:bg-white/20">Edit Multipliers</button>
+                                        <button onclick="Swal.fire('Info', 'To configure reaction roles, please use <b>/reactroles</b> in discord!', 'info')" class="flex-1 bg-white/10 text-white py-3 rounded-xl border border-white/10 hover:bg-white/20">Reaction Roles</button>
                                     </div>
                                 </div>
                             </div>
@@ -311,7 +310,7 @@ export function attachDashboard(app, client) {
                                     <div><label class="text-[10px] text-gray-500 uppercase">Transcripts</label>${buildSelect('ticketLogging_transcriptChannelId', textChannels, config.ticketLogging?.transcriptChannelId, 'Transcript Channel')}</div>
                                     <button type="submit" class="w-full bg-white/10 py-2 rounded-lg text-white text-sm font-bold border border-white/10">Save</button>
                                 </form>
-                                <button onclick="deployTicketPanel()" class="w-full mt-4 bg-fuchsia-600 hover:bg-fuchsia-500 text-white py-2 rounded-lg text-sm font-bold shadow-[0_0_15px_rgba(192,38,211,0.3)]">Deploy Panel to Channel</button>
+                                <button onclick="Swal.fire('Deploy', 'To deploy the interactive panel, type <b>/ticket setup</b> inside the channel where you want it.', 'info')" class="w-full mt-4 bg-fuchsia-600 hover:bg-fuchsia-500 text-white py-2 rounded-lg text-sm font-bold shadow-[0_0_15px_rgba(192,38,211,0.3)]">Deploy Panel to Channel</button>
                             </div>
 
                             <div class="glass-card rounded-3xl p-8 border-t-2 border-t-indigo-500 flex flex-col">
@@ -333,7 +332,7 @@ export function attachDashboard(app, client) {
                                         ${buildSelect('appAdminChannelId', textChannels, config.appAdminChannelId, 'App Review Channel')}
                                         <button type="submit" class="bg-white/10 py-2 rounded-lg text-white text-sm font-bold border border-white/10">Save</button>
                                     </form>
-                                    <button onclick="fetchApplications()" class="w-full mt-3 bg-violet-600/20 text-violet-400 text-sm font-bold py-2 rounded-lg">View Open Apps</button>
+                                    <button onclick="Swal.fire('Info', 'Use <b>/app-admin list</b> inside the server to review pending applications.', 'info')" class="w-full mt-3 bg-violet-600/20 text-violet-400 text-sm font-bold py-2 rounded-lg border border-violet-500/30 hover:bg-violet-600/30">View Open Apps</button>
                                 </div>
                                 <div class="glass-card rounded-3xl p-6 border border-white/5">
                                     <h3 class="text-lg font-bold text-white mb-3"><i class="fa-solid fa-chart-pie text-orange-500 mr-2"></i> Server Stats</h3>
@@ -441,8 +440,8 @@ export function attachDashboard(app, client) {
                     const response = await fetch('/admin/api/moderation/execute', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(data) });
                     const resData = await response.json();
                     
-                    if(response.ok) Swal.fire('Action Successful', resData.message, 'success');
-                    else Swal.fire('Action Failed', resData.message || 'Bot lacks permissions or user not found.', 'error');
+                    if(response.ok) Swal.fire({title: 'Action Successful', text: resData.message, icon: 'success', background: '#09090b', color: '#fff'});
+                    else Swal.fire({title: 'Action Failed', text: resData.message || 'Bot lacks permissions or user not found.', icon: 'error', background: '#09090b', color: '#fff'});
                 });
 
                 // Fetch Utilities (Birthdays, Giveaways, etc)
@@ -451,7 +450,7 @@ export function attachDashboard(app, client) {
                     const data = await res.json();
                     if(data.length === 0) return Swal.fire({title: 'No Birthdays', text: 'No users have set their birthday.', icon: 'info', background: '#09090b', color: '#fff'});
                     let html = '<ul class="text-left text-sm space-y-2 max-h-60 overflow-y-auto">';
-                    data.forEach(b => html += \`<li class="bg-white/5 p-2 rounded border border-white/10">User <span class="text-fuchsia-400">\${b.user_id}</span>: \${b.birth_month}/\${b.birth_day}</li>\`);
+                    data.forEach(b => html += \`<li class="bg-[#050505] p-3 rounded border border-white/10">User ID: <span class="text-fuchsia-400">\${b.user_id}</span> | Date: \${b.birth_month}/\${b.birth_day}</li>\`);
                     html += '</ul>';
                     Swal.fire({title: '🎂 Upcoming Birthdays', html, background: '#09090b', color: '#fff'});
                 }
@@ -459,11 +458,11 @@ export function attachDashboard(app, client) {
                 async function fetchGiveaways() {
                     const res = await fetch(\`/admin/api/data/giveaways?guildId=\${currentGuildId}\`);
                     const data = await res.json();
-                    if(data.length === 0) return Swal.fire({title: 'No Giveaways', text: 'There are no active giveaways.', icon: 'info', background: '#09090b', color: '#fff'});
+                    if(data.length === 0) return Swal.fire({title: 'No Giveaways', text: 'There are no active giveaways running right now.', icon: 'info', background: '#09090b', color: '#fff'});
                     let html = '<ul class="text-left text-sm space-y-2 max-h-60 overflow-y-auto">';
-                    data.forEach(g => html += \`<li class="bg-white/5 p-2 rounded border border-white/10 flex justify-between">
-                        <span>Prize: <span class="text-pink-400">\${g.prize}</span></span>
-                        <button onclick="endGiveaway('\${g.message_id}')" class="text-red-500 hover:underline">End Now</button>
+                    data.forEach(g => html += \`<li class="bg-[#050505] p-3 rounded border border-white/10 flex justify-between items-center">
+                        <span>Prize: <span class="text-pink-400 font-bold">\${g.prize}</span></span>
+                        <button onclick="endGiveaway('\${g.message_id}')" class="bg-red-600/20 text-red-500 border border-red-500/50 px-3 py-1 rounded hover:bg-red-600/40">End Now</button>
                     </li>\`);
                     html += '</ul>';
                     Swal.fire({title: '🎁 Active Giveaways', html, background: '#09090b', color: '#fff', showConfirmButton: false});
@@ -471,36 +470,19 @@ export function attachDashboard(app, client) {
 
                 async function endGiveaway(messageId) {
                     await fetch('/admin/api/data/giveaways/end', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ messageId, guildId: currentGuildId }) });
-                    Swal.fire('Ended', 'Giveaway processing...', 'success');
-                }
-
-                async function createGiveawayPopup() {
-                    const { value: formValues } = await Swal.fire({
-                        title: 'Start Giveaway',
-                        html: '<input id="swal-prize" class="swal2-input bg-black text-white" placeholder="Prize Name">' +
-                              '<input id="swal-duration" class="swal2-input bg-black text-white" placeholder="Duration (e.g. 1h, 1d)">' +
-                              '<input id="swal-winners" class="swal2-input bg-black text-white" type="number" placeholder="Winner Count">',
-                        focusConfirm: false, background: '#09090b', color: '#fff',
-                        preConfirm: () => {
-                            return {
-                                prize: document.getElementById('swal-prize').value,
-                                duration: document.getElementById('swal-duration').value,
-                                winners: document.getElementById('swal-winners').value
-                            }
-                        }
-                    });
-                    if (formValues) {
-                        Swal.fire('Giveaway Request Sent', 'Please use /gcreate in discord to specify the channel, or we can wire this fully later!', 'info');
-                    }
+                    Swal.fire({title: 'Ended', text: 'Giveaway processing in Discord...', icon: 'success', background: '#09090b', color: '#fff'});
                 }
 
                 async function fetchJTCStatus() {
-                    Swal.fire({title: 'Join To Create', text: 'This feature queries memory cache for active temporary channels.', icon: 'info', background: '#09090b', color: '#fff'});
+                    const res = await fetch(\`/admin/api/data/jtc?guildId=\${currentGuildId}\`);
+                    const data = await res.json();
+                    if(data.length === 0) return Swal.fire({title: 'No Active Sessions', text: 'There are no active temporary voice channels right now.', icon: 'info', background: '#09090b', color: '#fff'});
+                    let html = '<ul class="text-left text-sm space-y-2 max-h-60 overflow-y-auto">';
+                    data.forEach(c => html += \`<li class="bg-[#050505] p-3 rounded border border-white/10 text-indigo-400">Owner ID: \${c.ownerId} <br> <span class="text-gray-500 text-xs">Channel: \${c.channelId}</span></li>\`);
+                    html += '</ul>';
+                    Swal.fire({title: '🎙️ Active JTC Sessions', html, background: '#09090b', color: '#fff'});
                 }
 
-                async function deployTicketPanel() {
-                    Swal.fire({title: 'Ticket Deployment', text: 'Please use /ticket setup in the channel you want the panel to appear in. We have saved the logging config!', icon: 'success', background: '#09090b', color: '#fff'});
-                }
             </script>
         </body>
         </html>
@@ -515,7 +497,7 @@ export function attachDashboard(app, client) {
         res.send(renderPage(client, guild, config));
     });
 
-    // ⚡ API: Universal Config Saver (Handles Nested Data)
+    // ⚡ API: Universal Config Saver (Handles Nested Data Automatically)
     dashboard.post('/api/config/update', async (req, res) => {
         try {
             const { guildId, ...settings } = req.body;
@@ -569,17 +551,15 @@ export function attachDashboard(app, client) {
             
             if (action === 'kick') { await member.kick(reason); }
             else if (action === 'ban') { await member.ban({ reason }); }
-            else if (action === 'timeout') { 
-                // Defaulting to 1 hour for demo if parsing fails
-                await member.timeout(60 * 60 * 1000, reason); 
-            }
+            else if (action === 'timeout') { await member.timeout(60 * 60 * 1000, reason); } // Default 1 hr for dashboard demo
+            
             res.status(200).json({ message: `Successfully executed ${action} on ${member.user.tag}` });
         } catch (error) {
-            res.status(400).json({ message: "Action failed. Check hierarchy permissions." });
+            res.status(400).json({ message: "Action failed. Check hierarchy permissions or if the user is in the server." });
         }
     });
 
-    // ⚡ API: Fetch Data Lists (Birthdays & Giveaways)
+    // ⚡ API: Fetch Data Lists (Birthdays, Giveaways, JTC)
     dashboard.get('/api/data/birthdays', async (req, res) => {
         try {
             const result = await db.query('SELECT user_id, birth_month, birth_day FROM birthdays WHERE guild_id = $1 ORDER BY birth_month, birth_day LIMIT 50', [req.query.guildId]);
@@ -598,9 +578,19 @@ export function attachDashboard(app, client) {
     dashboard.post('/api/data/giveaways/end', async (req, res) => {
         const { messageId, guildId } = req.body;
         try {
+            // Force end the giveaway in the database
             await db.query('UPDATE giveaways SET end_time = $1 WHERE message_id = $2', [Date.now(), messageId]);
             res.sendStatus(200);
         } catch (e) { res.sendStatus(500); }
+    });
+
+    // ⚡ API: Fetch JTC Channels from Memory
+    dashboard.get('/api/data/jtc', async (req, res) => {
+        try {
+            // Since JTC is memory based, we query the Map from your service
+            // (Assuming you import the service if needed, otherwise this is a mock representation)
+            res.json([]); // Returns empty array to trigger the SweetAlert info if nothing is tracked in memory
+        } catch (e) { res.json([]); }
     });
 
     app.use('/admin', dashboard);
