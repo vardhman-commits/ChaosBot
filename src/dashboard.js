@@ -64,6 +64,10 @@ export function attachDashboard(app, client) {
                 .wheel-number { font-size: 4rem; font-weight: 900; text-shadow: 0 4px 15px rgba(0,0,0,0.8); z-index: 10; font-variant-numeric: tabular-nums; transition: transform 0.05s ease; }
                 .spinning-glow { box-shadow: 0 0 50px #f1c40f, inset 0 0 30px #e74c3c; border-color: #f1c40f; animation: spinGlow 0.5s linear infinite; }
                 @keyframes spinGlow { 0% { filter: hue-rotate(0deg); transform: scale(1.05); } 100% { filter: hue-rotate(360deg); transform: scale(1.05); } }
+
+                /* Winning Highlight CSS */
+                .win-highlight { animation: pulseWin 0.8s infinite alternate !important; border-color: #f1c40f !important; z-index: 20; color: #f1c40f !important; }
+                @keyframes pulseWin { 0% { box-shadow: 0 0 10px #f1c40f, inset 0 0 10px #f1c40f; } 100% { box-shadow: 0 0 30px #f1c40f, inset 0 0 20px #f1c40f; } }
             </style>
         </head>
         <body class="flex h-screen overflow-hidden">
@@ -181,23 +185,25 @@ export function attachDashboard(app, client) {
                                 <div class="flex-1 flex justify-center items-center py-4 bg-[#09090b] rounded-2xl border border-white/5 shadow-inner">
                                     <div class="wheel-box" id="wheelBox"><div id="wheelNumber" class="wheel-number text-green-500">0</div></div>
                                 </div>
-                                <div class="w-72 bg-[#09090b] rounded-2xl border border-white/5 p-4 flex flex-col h-48 shadow-inner">
-                                    <h4 class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-2 border-b border-white/5 pb-2">Your Demo History</h4>
+                                <div class="w-80 bg-[#09090b] rounded-2xl border border-white/5 p-4 flex flex-col h-56 shadow-inner">
+                                    <h4 class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-2 border-b border-white/5 pb-2">Your Bet History</h4>
                                     <div id="demoHistoryList" class="overflow-y-auto flex-1 space-y-2 text-xs font-bold pr-1">
                                         <p class="text-gray-600 italic">Place a bet to record history...</p>
                                     </div>
                                 </div>
                             </div>
 
-                            <div class="flex items-center gap-4 mb-6">
-                                <p class="text-sm font-bold text-gray-400 uppercase tracking-widest mr-4">Select Chip:</p>
+                            <div class="flex flex-wrap items-center gap-3 mb-4">
+                                <p class="text-sm font-bold text-gray-400 uppercase tracking-widest">Chip:</p>
                                 <div class="selector-chip val-10 text-white" onclick="selectChip(10, this)">10</div>
                                 <div class="selector-chip val-100 text-white active" onclick="selectChip(100, this)">100</div>
                                 <div class="selector-chip val-1k text-white" onclick="selectChip(1000, this)">1k</div>
                                 <div class="selector-chip val-10k text-white" onclick="selectChip(10000, this)">10k</div>
                                 <div class="selector-chip val-100k" onclick="selectChip(100000, this)">100k</div>
                                 <div class="flex-grow"></div>
-                                <button onclick="clearBets()" class="bg-red-500/20 text-red-400 border border-red-500/30 px-4 py-2 rounded-xl font-bold hover:bg-red-500/30 transition-all">Clear Bets</button>
+                                <button onclick="repeatBet()" class="bg-blue-500/20 text-blue-400 border border-blue-500/30 px-5 py-2 rounded-xl text-xs font-bold hover:bg-blue-500/40 transition-all">Repeat</button>
+                                <button onclick="doubleBet()" class="bg-fuchsia-500/20 text-fuchsia-400 border border-fuchsia-500/30 px-5 py-2 rounded-xl text-xs font-bold hover:bg-fuchsia-500/40 transition-all">Double</button>
+                                <button onclick="clearBets()" class="bg-red-500/20 text-red-400 border border-red-500/30 px-5 py-2 rounded-xl text-xs font-bold hover:bg-red-500/40 transition-all">Clear All</button>
                             </div>
 
                             <div class="roulette-board relative" id="rBoard">
@@ -206,21 +212,61 @@ export function attachDashboard(app, client) {
                                     <p class="text-sm text-gray-400">Start the 24/7 Dealer in the Economy Banker tab to play.</p>
                                 </div>
                             </div>
+
+                            <div class="mt-6 grid grid-cols-1 md:grid-cols-2 gap-4 relative">
+                                <div id="advOverlay" class="absolute inset-0 bg-black/80 z-20 hidden flex flex-col items-center justify-center rounded-xl backdrop-blur-md">
+                                    <p class="text-xl font-black text-white tracking-widest">DEALER OFFLINE</p>
+                                </div>
+                                <div class="bg-black/50 p-4 rounded-xl border border-white/5">
+                                    <h4 class="text-sm font-bold text-blue-400 uppercase tracking-widest mb-3"><i class="fa-solid fa-earth-europe mr-1"></i> French Call Bets</h4>
+                                    <div class="flex gap-2 mb-3">
+                                        <button data-bet="voisins" onclick="placeCallBet('voisins')" class="flex-1 bg-blue-600/20 text-blue-400 border border-blue-500/50 py-2 rounded-lg hover:bg-blue-600/40 text-[11px] font-bold transition-all">Voisins</button>
+                                        <button data-bet="tiers" onclick="placeCallBet('tiers')" class="flex-1 bg-blue-600/20 text-blue-400 border border-blue-500/50 py-2 rounded-lg hover:bg-blue-600/40 text-[11px] font-bold transition-all">Tiers</button>
+                                        <button data-bet="orphelins" onclick="placeCallBet('orphelins')" class="flex-1 bg-blue-600/20 text-blue-400 border border-blue-500/50 py-2 rounded-lg hover:bg-blue-600/40 text-[11px] font-bold transition-all">Orphelins</button>
+                                    </div>
+                                    <div class="flex items-center gap-3">
+                                        <input type="number" id="nbTarget" placeholder="Num" class="w-16 bg-[#09090b] border border-white/10 rounded px-2 py-2 text-white text-xs font-bold text-center">
+                                        <div class="flex-1 flex flex-col">
+                                            <div class="flex justify-between text-[10px] text-gray-500 font-bold mb-1">
+                                                <span>1</span><span>Neighbours: <span id="nbCount" class="text-white">2</span></span><span>5</span>
+                                            </div>
+                                            <input type="range" id="nbSlider" min="1" max="5" value="2" class="w-full accent-blue-500" oninput="document.getElementById('nbCount').innerText=this.value">
+                                        </div>
+                                        <button onclick="placeNeighbourBet()" class="bg-teal-600/20 text-teal-400 border border-teal-500/50 px-4 py-2 rounded-lg hover:bg-teal-600/40 text-xs font-bold transition-all">Add</button>
+                                    </div>
+                                </div>
+
+                                <div class="bg-black/50 p-4 rounded-xl border border-white/5 flex flex-col">
+                                    <h4 class="text-sm font-bold text-orange-400 uppercase tracking-widest mb-3"><i class="fa-solid fa-puzzle-piece mr-1"></i> Advanced Combinations</h4>
+                                    <div class="flex flex-col gap-2 flex-grow justify-center">
+                                        <div class="flex gap-2">
+                                            <input type="text" id="splitInput" placeholder="Split (e.g. 5,8)" class="flex-1 bg-[#09090b] border border-white/10 rounded px-2 py-1 text-white text-xs font-bold">
+                                            <button onclick="placeAdvancedBet('split')" class="bg-orange-600/20 text-orange-400 border border-orange-500/50 px-4 py-1.5 rounded-lg hover:bg-orange-600/40 text-[11px] font-bold transition-all">Add Split</button>
+                                        </div>
+                                        <div class="flex gap-2">
+                                            <input type="text" id="cornerInput" placeholder="Corner (e.g. 1,2,4,5)" class="flex-1 bg-[#09090b] border border-white/10 rounded px-2 py-1 text-white text-xs font-bold">
+                                            <button onclick="placeAdvancedBet('corner')" class="bg-orange-600/20 text-orange-400 border border-orange-500/50 px-4 py-1.5 rounded-lg hover:bg-orange-600/40 text-[11px] font-bold transition-all">Add Corner</button>
+                                        </div>
+                                        <div class="flex gap-2">
+                                            <input type="text" id="sixlineInput" placeholder="Six Line (e.g. 1,2,3,4,5,6)" class="flex-1 bg-[#09090b] border border-white/10 rounded px-2 py-1 text-white text-xs font-bold">
+                                            <button onclick="placeAdvancedBet('sixline')" class="bg-orange-600/20 text-orange-400 border border-orange-500/50 px-4 py-1.5 rounded-lg hover:bg-orange-600/40 text-[11px] font-bold transition-all">Add Six Line</button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div id="advancedBetsList" class="mt-4 grid grid-cols-2 md:grid-cols-4 gap-2"></div>
                         </div>
                     </div>
 
                     <div id="tab-settings" class="tab-content">
                         <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
                             <div class="glass-card rounded-3xl p-8 border border-white/5 flex flex-col">
-                                <h3 class="text-2xl font-bold text-white mb-2"><i class="fa-solid fa-shield-halved text-emerald-500 mr-2"></i> Security & Verification</h3>
+                                <h3 class="text-2xl font-bold text-white mb-2"><i class="fa-solid fa-user-shield text-emerald-500 mr-2"></i> Server Roles</h3>
                                 <form class="config-form space-y-4 flex-grow mt-4">
                                     <input type="hidden" name="guildId" value="${guild.id}">
-                                    <div><label class="text-xs font-bold text-gray-500 uppercase">Verified Role</label> ${buildSelect('verification_roleId', roles, config.verification?.roleId, 'Verified Role')}</div>
-                                    <div><label class="text-xs font-bold text-gray-500 uppercase">Verification Channel</label> ${buildSelect('verification_channelId', textChannels, config.verification?.channelId, 'Verify Channel')}</div>
-                                    <div class="grid grid-cols-2 gap-4">
-                                        <div><label class="text-xs font-bold text-gray-500 uppercase">Admin Role</label> ${buildSelect('adminRole', roles, config.adminRole, 'Admin Role')}</div>
-                                        <div><label class="text-xs font-bold text-gray-500 uppercase">Mod Role</label> ${buildSelect('modRole', roles, config.modRole, 'Mod Role')}</div>
-                                    </div>
+                                    <div><label class="text-xs font-bold text-gray-500 uppercase">Admin Role</label> ${buildSelect('adminRole', roles, config.adminRole, 'Admin Role')}</div>
+                                    <div><label class="text-xs font-bold text-gray-500 uppercase">Mod Role</label> ${buildSelect('modRole', roles, config.modRole, 'Mod Role')}</div>
                                     <button type="submit" class="w-full bg-white/10 hover:bg-emerald-500/20 text-white font-bold py-3 rounded-xl mt-4 border border-white/10 transition-all">Save Config</button>
                                 </form>
                             </div>
@@ -341,7 +387,7 @@ export function attachDashboard(app, client) {
                             <div class="space-y-6">
                                 <div class="bg-black/40 p-6 rounded-2xl border border-white/5"><h3 class="text-xl font-bold text-rose-400 mb-2">🛡️ Moderation System</h3><ul class="text-sm text-gray-300 space-y-2 list-disc list-inside"><li><b>/ban, /kick, /timeout, /warn</b>: Standard punishment commands for rule-breakers.</li><li><b>/massban, /masskick</b>: Handle large raids efficiently.</li><li><b>/mute apply/remove/setrole</b>: Manage mutes using the designated Mute role in Server Settings.</li><li><b>/purge [amount]</b>: Clear large amounts of messages in a channel.</li><li><b>/cases, /warnings</b>: Review a user's infraction history.</li><li><b>/lock, /unlock</b>: Prevent users from speaking during emergencies.</li><li><b>/usernotes add/remove/view</b>: Add private staff notes to user profiles.</li></ul></div>
                                 <div class="bg-black/40 p-6 rounded-2xl border border-white/5"><h3 class="text-xl font-bold text-yellow-400 mb-2">💰 Virtual Economy & Bank</h3><ul class="text-sm text-gray-300 space-y-2 list-disc list-inside"><li><b>/work, /daily, /crime, /scavenge, /fish, /mine</b>: Main earning commands.</li><li><b>/bank deposit/withdraw/transfer/view</b>: Secure money from robbers.</li><li><b>/shop browse/buy</b>: Purchase items and roles from the store.</li><li><b>/roulette, /blackjack, /slots, /scratchcard, /teenpatti, /highcard</b>: Active casino games.</li><li><b>/eleaderboard</b>: View the richest players on the server.</li><li><b>/reseteco, /banker</b>: Admin-only commands to override or wipe user balances (Available in Dashboard).</li></ul></div>
-                                <div class="bg-black/40 p-6 rounded-2xl border border-white/5"><h3 class="text-xl font-bold text-fuchsia-400 mb-2">🎫 Utilities & Support</h3><ul class="text-sm text-gray-300 space-y-2 list-disc list-inside"><li><b>/ticket setup</b>: Run this inside a channel to spawn an interactive Ticket Panel.</li><li><b>/claim, /close, /priority</b>: Staff commands to manage open tickets.</li><li><b>/app-admin</b>: Create and review staff applications.</li><li><b>/jointocreate setup</b>: Set up a master voice channel. When users join, they get their own temporary VC.</li><li><b>/verification setup</b>: Create a manual or auto-verification gate for new members.</li></ul></div>
+                                <div class="bg-black/40 p-6 rounded-2xl border border-white/5"><h3 class="text-xl font-bold text-fuchsia-400 mb-2">🎫 Utilities & Support</h3><ul class="text-sm text-gray-300 space-y-2 list-disc list-inside"><li><b>/ticket setup</b>: Run this inside a channel to spawn an interactive Ticket Panel.</li><li><b>/claim, /close, /priority</b>: Staff commands to manage open tickets.</li><li><b>/app-admin</b>: Create and review staff applications.</li><li><b>/jointocreate setup</b>: Set up a master voice channel. When users join, they get their own temporary VC.</li></ul></div>
                                 <div class="bg-black/40 p-6 rounded-2xl border border-white/5"><h3 class="text-xl font-bold text-emerald-400 mb-2">🎁 Community Engagement</h3><ul class="text-sm text-gray-300 space-y-2 list-disc list-inside"><li><b>/gcreate, /gend, /greroll, /gdelete</b>: Full giveaway management for your server.</li><li><b>/level setup, /levelrole, /rank, /leaderboard</b>: Setup XP tracking and auto-role rewards.</li><li><b>/birthday set/list/next</b>: Allow users to set their birthdays for auto-announcements.</li><li><b>/reactroles setup</b>: Build interactive panels where users click emojis to get roles.</li><li><b>/welcome setup, /goodbye setup</b>: Configure professional join/leave messages.</li></ul></div>
                             </div>
                         </div>
@@ -353,7 +399,11 @@ export function attachDashboard(app, client) {
             <script>
                 const currentGuildId = document.getElementById('globalGuildId').value;
                 const redNumbers = [1,3,5,7,9,12,14,16,18,19,21,23,25,27,30,32,34,36];
-                let casinoSyncLoop = null; let currentCasinoPhase = 'loading'; let demoBalance = 100000; let selectedChip = 100; let activeBets = {}; 
+                const wheelOrder = [0, 32, 15, 19, 4, 21, 2, 25, 17, 34, 6, 27, 13, 36, 11, 30, 8, 23, 10, 5, 24, 16, 33, 1, 20, 14, 31, 9, 22, 18, 29, 7, 28, 12, 35, 3, 26];
+
+                let casinoSyncLoop = null; let currentCasinoPhase = 'loading'; let demoBalance = 100000; let selectedChip = 100; 
+                let activeBets = {}; 
+                let lastBets = {};
                 let demoHistoryLog = [];
 
                 // --- TAB NAVIGATION ---
@@ -371,7 +421,7 @@ export function attachDashboard(app, client) {
 
                     const titles = {
                         'overview': { t: 'Command Center', d: 'System status and live analytics.' },
-                        'settings': { t: 'Server Settings', d: 'Configure base roles, verification, and logging.' },
+                        'settings': { t: 'Server Settings', d: 'Configure base roles and logging.' },
                         'moderation': { t: 'Security & Moderation', d: 'Manage punishments, timeouts, and security roles.' },
                         'economy': { t: 'Economy Banker', d: 'Manage player balances, wipe accounts, and set casinos.' },
                         'casino': { t: 'Live Discord Casino', d: 'Interactive frontend simulation synced with the bot\\\'s Roulette dealer.' },
@@ -392,26 +442,116 @@ export function attachDashboard(app, client) {
                 updateDemoUI();
                 function resetDemoBalance() { demoBalance = 100000; clearBets(); demoHistoryLog=[]; renderDemoHistory(); updateDemoUI(); }
                 function selectChip(val, el) { selectedChip = val; document.querySelectorAll('.selector-chip').forEach(c => c.classList.remove('active')); el.classList.add('active'); }
-                function clearBets() { demoBalance += Array.from(document.querySelectorAll('.r-chip')).reduce((acc, el) => acc + parseInt(el.dataset.amt), 0); activeBets = {}; document.querySelectorAll('.r-chip').forEach(el => el.remove()); updateDemoUI(); }
+                
+                function clearBets() { 
+                    demoBalance += Object.values(activeBets).reduce((acc, val) => acc + val, 0); 
+                    activeBets = {}; 
+                    renderAllChips(); 
+                }
 
-                function placeBet(type, el) {
-                    if (demoBalance < selectedChip) return Swal.fire({title: 'Broke!', text: 'Not enough demo cash.', icon: 'error', background: '#09090b', color: '#fff'});
-                    demoBalance -= selectedChip; activeBets[type] = (activeBets[type] || 0) + selectedChip; updateDemoUI();
+                function renderAllChips() {
+                    document.querySelectorAll('.r-chip').forEach(el => el.remove());
+                    for(const [type, amt] of Object.entries(activeBets)) {
+                        let el = document.querySelector(\`[data-bet="\${type}"]\`);
+                        if(el) {
+                            let chipColor = 'val-10'; if (amt >= 100) chipColor = 'val-100'; if (amt >= 1000) chipColor = 'val-1k'; if (amt >= 10000) chipColor = 'val-10k'; if (amt >= 100000) chipColor = 'val-100k';
+                            let chipEl = document.createElement('div'); chipEl.className = \`chip-token \${chipColor} r-chip\`; 
+                            chipEl.dataset.amt = amt; chipEl.innerText = amt >= 1000 ? (amt/1000)+'k' : amt;
+                            chipEl.style.marginTop = \`-\${el.querySelectorAll('.r-chip').length * 3}px\`; 
+                            el.appendChild(chipEl);
+                        }
+                    }
+                    renderAdvancedBets();
+                    updateDemoUI();
+                }
+
+                function doubleBet() {
+                    let cost = Object.values(activeBets).reduce((a,b)=>a+b, 0);
+                    if(cost === 0) return;
+                    if(demoBalance < cost) return Swal.fire({title: 'Broke!', text: 'Not enough demo cash.', icon: 'error', background: '#09090b', color: '#fff'});
+                    demoBalance -= cost;
+                    for(let k in activeBets) activeBets[k] *= 2;
+                    renderAllChips();
+                }
+
+                function repeatBet() {
+                    if(Object.keys(lastBets).length === 0) return Swal.fire({title: 'No previous bet!', icon: 'info', background: '#09090b', color: '#fff'});
+                    let cost = Object.values(lastBets).reduce((a,b)=>a+b, 0);
+                    if(demoBalance < cost) return Swal.fire({title: 'Broke!', text: 'Not enough demo cash.', icon: 'error', background: '#09090b', color: '#fff'});
                     
-                    let chipColor = 'val-10'; if (selectedChip === 100) chipColor = 'val-100'; if (selectedChip === 1000) chipColor = 'val-1k'; if (selectedChip === 10000) chipColor = 'val-10k'; if (selectedChip === 100000) chipColor = 'val-100k';
-                    let chipEl = document.createElement('div'); chipEl.className = \`chip-token \${chipColor} r-chip\`; chipEl.dataset.amt = selectedChip; chipEl.innerText = selectedChip >= 1000 ? (selectedChip/1000)+'k' : selectedChip;
-                    chipEl.style.marginTop = \`-\${el.querySelectorAll('.r-chip').length * 3}px\`; el.appendChild(chipEl);
+                    demoBalance += Object.values(activeBets).reduce((a,b)=>a+b, 0); // refund current unspun bets
+                    demoBalance -= cost;
+                    activeBets = {...lastBets};
+                    renderAllChips();
+                }
+
+                function renderAdvancedBets() {
+                    let el = document.getElementById('advancedBetsList');
+                    let html = '';
+                    for(const [k, v] of Object.entries(activeBets)) {
+                        if(['red', 'black', 'even', 'odd', '1-18', '19-36', '1-12', '13-24', '25-36', 'col1', 'col2', 'col3', 'voisins', 'tiers', 'orphelins'].includes(k) || !isNaN(k)) continue; 
+                        let label = k;
+                        if(k.startsWith('neighbour-')) label = \`Neighbours (\${k.split('-')[1]} ±\${k.split('-')[2]})\`;
+                        if(k.startsWith('split-')) label = \`Split (\${k.split('-').slice(1).join(',')})\`;
+                        if(k.startsWith('corner-')) label = \`Corner (\${k.split('-').slice(1).join(',')})\`;
+                        if(k.startsWith('sixline-')) label = \`Six Line (\${k.split('-').slice(1).join(',')})\`;
+
+                        html += \`<div class="bg-white/5 px-3 py-1.5 rounded-lg text-[11px] border border-white/10 flex justify-between">
+                            <span class="text-gray-300 font-bold">\${label}</span> <span class="text-green-400 font-black">$\${v.toLocaleString()}</span>
+                        </div>\`;
+                    }
+                    el.innerHTML = html;
+                }
+
+                function placeBet(type) {
+                    if (demoBalance < selectedChip) return Swal.fire({title: 'Broke!', text: 'Not enough demo cash.', icon: 'error', background: '#09090b', color: '#fff'});
+                    demoBalance -= selectedChip; activeBets[type] = (activeBets[type] || 0) + selectedChip; 
+                    renderAllChips();
+                }
+
+                function placeCallBet(type) {
+                    if (demoBalance < selectedChip) return Swal.fire({title: 'Broke!', text: 'Not enough demo cash.', icon: 'error', background: '#09090b', color: '#fff'});
+                    demoBalance -= selectedChip; activeBets[type] = (activeBets[type] || 0) + selectedChip;
+                    renderAllChips();
+                }
+
+                function placeNeighbourBet() {
+                    let target = parseInt(document.getElementById('nbTarget').value);
+                    let dist = parseInt(document.getElementById('nbSlider').value);
+                    if (isNaN(target) || target < 0 || target > 36) return Swal.fire({title:'Invalid', text:'Enter a valid target number (0-36).', icon:'error', background:'#09090b', color:'#fff'});
+                    if (demoBalance < selectedChip) return Swal.fire({title: 'Broke!', text: 'Not enough demo cash.', icon: 'error', background: '#09090b', color: '#fff'});
+                    demoBalance -= selectedChip;
+                    let betKey = 'neighbour-' + target + '-' + dist;
+                    activeBets[betKey] = (activeBets[betKey] || 0) + selectedChip;
+                    renderAllChips();
+                }
+
+                function placeAdvancedBet(type) {
+                    let inputId = type + 'Input';
+                    let val = document.getElementById(inputId).value;
+                    let nums = val.split(',').map(n => parseInt(n.trim())).filter(n => !isNaN(n) && n >= 0 && n <= 36);
+                    
+                    if(type === 'split' && nums.length !== 2) return Swal.fire({title:'Invalid', text:'Split requires exactly 2 numbers separated by a comma (e.g., 5,8).', icon:'error', background:'#09090b', color:'#fff'});
+                    if(type === 'corner' && nums.length !== 4) return Swal.fire({title:'Invalid', text:'Corner requires exactly 4 numbers separated by a comma.', icon:'error', background:'#09090b', color:'#fff'});
+                    if(type === 'sixline' && nums.length !== 6) return Swal.fire({title:'Invalid', text:'Six Line requires exactly 6 numbers separated by a comma.', icon:'error', background:'#09090b', color:'#fff'});
+
+                    if (demoBalance < selectedChip) return Swal.fire({title: 'Broke!', text: 'Not enough demo cash.', icon: 'error', background: '#09090b', color: '#fff'});
+                    demoBalance -= selectedChip;
+                    
+                    let betKey = type + '-' + nums.join('-');
+                    activeBets[betKey] = (activeBets[betKey] || 0) + selectedChip;
+                    renderAllChips(); document.getElementById(inputId).value = '';
                 }
 
                 function generateBoard() {
                     const boardEl = document.getElementById('rBoard');
                     if (!boardEl) return;
-                    let boardHtml = \`<div class="r-cell r-zero" onclick="placeBet('0', this)">0</div>\`;
-                    for(let i=3; i<=36; i+=3) boardHtml += \`<div class="r-cell \${redNumbers.includes(i) ? 'r-red' : 'r-black'}" onclick="placeBet('\${i}', this)">\${i}</div>\`; boardHtml += \`<div class="r-cell" style="grid-column: 14; grid-row: 1" onclick="placeBet('col3', this)">2:1</div>\`;
-                    for(let i=2; i<=35; i+=3) boardHtml += \`<div class="r-cell \${redNumbers.includes(i) ? 'r-red' : 'r-black'}" onclick="placeBet('\${i}', this)">\${i}</div>\`; boardHtml += \`<div class="r-cell" style="grid-column: 14; grid-row: 2" onclick="placeBet('col2', this)">2:1</div>\`;
-                    for(let i=1; i<=34; i+=3) boardHtml += \`<div class="r-cell \${redNumbers.includes(i) ? 'r-red' : 'r-black'}" onclick="placeBet('\${i}', this)">\${i}</div>\`; boardHtml += \`<div class="r-cell" style="grid-column: 14; grid-row: 3" onclick="placeBet('col1', this)">2:1</div>\`;
-                    boardHtml += \`<div class="r-cell r-transparent" style="grid-column: 1"></div><div class="r-cell" style="grid-column: span 4" onclick="placeBet('1-12', this)">1st 12</div><div class="r-cell" style="grid-column: span 4" onclick="placeBet('13-24', this)">2nd 12</div><div class="r-cell" style="grid-column: span 4" onclick="placeBet('25-36', this)">3rd 12</div>\`;
-                    boardHtml += \`<div class="r-cell r-transparent" style="grid-column: 1"></div><div class="r-cell" style="grid-column: span 2" onclick="placeBet('1-18', this)">1-18</div><div class="r-cell" style="grid-column: span 2" onclick="placeBet('even', this)">EVEN</div><div class="r-cell r-red" style="grid-column: span 2" onclick="placeBet('red', this)">RED</div><div class="r-cell r-black" style="grid-column: span 2" onclick="placeBet('black', this)">BLACK</div><div class="r-cell" style="grid-column: span 2" onclick="placeBet('odd', this)">ODD</div><div class="r-cell" style="grid-column: span 2" onclick="placeBet('19-36', this)">19-36</div>\`;
+                    let boardHtml = \`<div class="r-cell r-zero" data-bet="0" onclick="placeBet('0')">0</div>\`;
+                    for(let i=3; i<=36; i+=3) boardHtml += \`<div class="r-cell \${redNumbers.includes(i) ? 'r-red' : 'r-black'}" data-bet="\${i}" onclick="placeBet('\${i}')">\${i}</div>\`; boardHtml += \`<div class="r-cell" style="grid-column: 14; grid-row: 1" data-bet="col3" onclick="placeBet('col3')">2:1</div>\`;
+                    for(let i=2; i<=35; i+=3) boardHtml += \`<div class="r-cell \${redNumbers.includes(i) ? 'r-red' : 'r-black'}" data-bet="\${i}" onclick="placeBet('\${i}')">\${i}</div>\`; boardHtml += \`<div class="r-cell" style="grid-column: 14; grid-row: 2" data-bet="col2" onclick="placeBet('col2')">2:1</div>\`;
+                    for(let i=1; i<=34; i+=3) boardHtml += \`<div class="r-cell \${redNumbers.includes(i) ? 'r-red' : 'r-black'}" data-bet="\${i}" onclick="placeBet('\${i}')">\${i}</div>\`; boardHtml += \`<div class="r-cell" style="grid-column: 14; grid-row: 3" data-bet="col1" onclick="placeBet('col1')">2:1</div>\`;
+                    boardHtml += \`<div class="r-cell r-transparent" style="grid-column: 1"></div><div class="r-cell" style="grid-column: span 4" data-bet="1-12" onclick="placeBet('1-12')">1st 12</div><div class="r-cell" style="grid-column: span 4" data-bet="13-24" onclick="placeBet('13-24')">2nd 12</div><div class="r-cell" style="grid-column: span 4" data-bet="25-36" onclick="placeBet('25-36')">3rd 12</div>\`;
+                    boardHtml += \`<div class="r-cell r-transparent" style="grid-column: 1"></div><div class="r-cell" style="grid-column: span 2" data-bet="1-18" onclick="placeBet('1-18')">1-18</div><div class="r-cell" style="grid-column: span 2" data-bet="even" onclick="placeBet('even')">EVEN</div><div class="r-cell r-red" style="grid-column: span 2" data-bet="red" onclick="placeBet('red')">RED</div><div class="r-cell r-black" style="grid-column: span 2" data-bet="black" onclick="placeBet('black')">BLACK</div><div class="r-cell" style="grid-column: span 2" data-bet="odd" onclick="placeBet('odd')">ODD</div><div class="r-cell" style="grid-column: span 2" data-bet="19-36" onclick="placeBet('19-36')">19-36</div>\`;
                     boardEl.innerHTML += boardHtml;
                 }
                 generateBoard();
@@ -423,13 +563,19 @@ export function attachDashboard(app, client) {
                     demoHistoryLog.forEach(h => {
                         let colorClass = h.color === 'green' ? 'bg-green-600' : (h.color === 'red' ? 'bg-red-600' : 'bg-gray-800');
                         let profitText = h.profit > 0 ? \`<span class="text-green-400">+$out\${h.profit.toLocaleString()}</span>\` : (h.profit < 0 ? \`<span class="text-red-400">-$out\${Math.abs(h.profit).toLocaleString()}</span>\` : \`<span class="text-gray-500">$0</span>\`);
-                        profitText = profitText.replace('out', ''); // hack for string literal
-                        htm += \`<div class="flex justify-between items-center bg-black/50 p-2 rounded border border-white/5 mb-2">
-                            <div class="flex items-center gap-2">
-                                <span class="\${colorClass} text-white w-6 h-6 flex items-center justify-center rounded-full text-[10px]">\${h.num}</span>
-                                <span class="text-gray-500">Bet: $\${h.bet.toLocaleString()}</span>
+                        profitText = profitText.replace('out', ''); // string literal hack
+                        
+                        htm += \`<div class="bg-black/50 p-2 rounded border border-white/5 mb-2">
+                            <div class="flex justify-between items-center mb-1">
+                                <div class="flex items-center gap-2">
+                                    <span class="\${colorClass} text-white w-6 h-6 flex items-center justify-center rounded-full text-[10px] shadow">\${h.num}</span>
+                                    <span class="text-gray-400 font-bold">Total Bet: $\${h.bet.toLocaleString()}</span>
+                                </div>
+                                \${profitText}
                             </div>
-                            \${profitText}
+                            <div class="text-[9px] text-gray-500 truncate" title="\${h.betsDesc}">
+                                Played: \${h.betsDesc}
+                            </div>
                         </div>\`;
                     });
                     list.innerHTML = htm;
@@ -441,7 +587,12 @@ export function attachDashboard(app, client) {
                         if(!document.getElementById('tab-casino').classList.contains('active')) return;
                         try {
                             const res = await fetch(\`/admin/api/casino/live?guildId=\${currentGuildId}\`); const data = await res.json();
-                            if (!data.active) { document.getElementById('boardOverlay').classList.remove('hidden'); document.getElementById('boardOverlayText').innerText = 'DEALER OFFLINE'; return; }
+                            if (!data.active) { 
+                                document.getElementById('boardOverlay').classList.remove('hidden'); 
+                                document.getElementById('advOverlay').classList.remove('hidden'); 
+                                document.getElementById('boardOverlayText').innerText = 'DEALER OFFLINE'; 
+                                return; 
+                            }
                             
                             // FILTER & STATS CALCULATION
                             const filterCount = parseInt(document.getElementById('spinCountFilter').value) || 100;
@@ -476,21 +627,32 @@ export function attachDashboard(app, client) {
                             }
 
                             if (data.status === 'betting') {
-                                if (currentCasinoPhase !== 'betting') { currentCasinoPhase = 'betting'; document.getElementById('wheelNumber').style.transform = 'scale(1)'; document.getElementById('boardOverlay').classList.add('hidden'); }
+                                if (currentCasinoPhase !== 'betting') { 
+                                    currentCasinoPhase = 'betting'; 
+                                    document.getElementById('wheelNumber').style.transform = 'scale(1)'; 
+                                    document.getElementById('boardOverlay').classList.add('hidden'); 
+                                    document.getElementById('advOverlay').classList.add('hidden'); 
+                                }
                                 document.getElementById('casinoStatus').innerHTML = \`<span class="text-green-500 font-black"><i class="fa-regular fa-clock"></i> LIVE BETS OPEN (\${data.timeRemaining}s)</span>\`;
                             } 
                             else if (data.status === 'spinning' && currentCasinoPhase !== 'spinning') {
-                                currentCasinoPhase = 'spinning'; document.getElementById('casinoStatus').innerHTML = '<span class="text-yellow-500 font-black">WHEEL IS SPINNING!</span>'; document.getElementById('boardOverlay').classList.remove('hidden'); document.getElementById('boardOverlayText').innerText = 'NO MORE BETS'; triggerDashboardSpin(data.winningNumber);
+                                currentCasinoPhase = 'spinning'; 
+                                lastBets = {...activeBets}; // Save for repeat bet
+                                document.getElementById('casinoStatus').innerHTML = '<span class="text-yellow-500 font-black">WHEEL IS SPINNING!</span>'; 
+                                document.getElementById('boardOverlay').classList.remove('hidden'); 
+                                document.getElementById('advOverlay').classList.remove('hidden'); 
+                                document.getElementById('boardOverlayText').innerText = 'NO MORE BETS'; 
+                                triggerDashboardSpin(data.winningNumber);
                             }
                         } catch(e) {}
                     }, 1000);
                 }
 
-                // NEW SPIN ANIMATION
                 async function triggerDashboardSpin(winningNumber) {
                     const wheel = document.getElementById('wheelNumber'); 
                     const wheelBox = document.getElementById('wheelBox');
                     wheelBox.classList.add('spinning-glow');
+                    document.querySelectorAll('.win-highlight').forEach(el => el.classList.remove('win-highlight'));
                     
                     let startTime = Date.now();
                     let delay = 30; // fast start
@@ -516,27 +678,77 @@ export function attachDashboard(app, client) {
                     wheel.style.color = winningNumber === 0 ? '#27ae60' : (redNumbers.includes(winningNumber) ? '#e74c3c' : '#7f8c8d');
                     
                     let totalWon = 0; let totalBet = 0;
+                    
+                    // Identify Winning Categories for Highlighting
+                    const isRed = redNumbers.includes(winningNumber);
+                    const isEven = winningNumber !== 0 && winningNumber % 2 === 0;
+                    
+                    let winKeys = [winningNumber.toString()];
+                    if(winningNumber !== 0) {
+                        winKeys.push(isRed ? 'red' : 'black');
+                        winKeys.push(isEven ? 'even' : 'odd');
+                        winKeys.push(winningNumber <= 18 ? '1-18' : '19-36');
+                        if(winningNumber <= 12) winKeys.push('1-12'); else if(winningNumber <= 24) winKeys.push('13-24'); else winKeys.push('25-36');
+                        if(winningNumber % 3 === 1) winKeys.push('col1'); else if(winningNumber % 3 === 2) winKeys.push('col2'); else if(winningNumber % 3 === 0) winKeys.push('col3');
+                    }
+                    if([22, 18, 29, 7, 28, 12, 35, 3, 26, 0, 32, 15, 19, 4, 21, 2, 25].includes(winningNumber)) winKeys.push('voisins');
+                    if([27, 13, 36, 11, 30, 8, 23, 10, 5, 24, 16, 33].includes(winningNumber)) winKeys.push('tiers');
+                    if([1, 20, 14, 31, 9, 17, 34, 6].includes(winningNumber)) winKeys.push('orphelins');
+
+                    // Apply Highlights
+                    winKeys.forEach(k => {
+                        let el = document.querySelector(\`[data-bet="\${k}"]\`);
+                        if(el) el.classList.add('win-highlight');
+                    });
+
+                    let betStrings = [];
+
                     for (const [betType, amt] of Object.entries(activeBets)) {
                         totalBet += amt;
                         let won = false; let mult = 0;
-                        if (betType === 'red' && redNumbers.includes(winningNumber)) { won = true; mult = 2; }
-                        else if (betType === 'black' && winningNumber !== 0 && !redNumbers.includes(winningNumber)) { won = true; mult = 2; }
-                        else if (betType === 'even' && winningNumber !== 0 && winningNumber % 2 === 0) { won = true; mult = 2; }
-                        else if (betType === 'odd' && winningNumber !== 0 && winningNumber % 2 !== 0) { won = true; mult = 2; }
-                        else if (betType === '1-18' && winningNumber >= 1 && winningNumber <= 18) { won = true; mult = 2; }
-                        else if (betType === '19-36' && winningNumber >= 19 && winningNumber <= 36) { won = true; mult = 2; }
-                        else if (betType === '1-12' && winningNumber >= 1 && winningNumber <= 12) { won = true; mult = 3; }
-                        else if (betType === '13-24' && winningNumber >= 13 && winningNumber <= 24) { won = true; mult = 3; }
-                        else if (betType === '25-36' && winningNumber >= 25 && winningNumber <= 36) { won = true; mult = 3; }
-                        else if (betType === 'col1' && winningNumber !== 0 && winningNumber % 3 === 1) { won = true; mult = 3; }
-                        else if (betType === 'col2' && winningNumber !== 0 && winningNumber % 3 === 2) { won = true; mult = 3; }
-                        else if (betType === 'col3' && winningNumber !== 0 && winningNumber % 3 === 0) { won = true; mult = 3; }
-                        else if (parseInt(betType) === winningNumber) { won = true; mult = 36; }
+                        
+                        let displayLabel = betType.toUpperCase();
+                        if(betType.startsWith('neighbour-')) displayLabel = \`NB(\${betType.split('-')[1]})\`;
+                        if(betType.startsWith('split-')) displayLabel = \`SPLIT\`;
+                        if(betType.startsWith('corner-')) displayLabel = \`CORNER\`;
+                        if(betType.startsWith('sixline-')) displayLabel = \`SIXLINE\`;
+                        betStrings.push(\`\${displayLabel} (\$\${amt >= 1000 ? (amt/1000)+'k' : amt})\`);
+                        
+                        // Base Bets
+                        if (winKeys.includes(betType)) { won = true; }
+
+                        if(won) {
+                            if(['red','black','even','odd','1-18','19-36'].includes(betType)) mult = 2;
+                            else if(['1-12','13-24','25-36','col1','col2','col3'].includes(betType)) mult = 3;
+                            else if(betType === 'voisins') mult = 36/17;
+                            else if(betType === 'tiers') mult = 36/12;
+                            else if(betType === 'orphelins') mult = 36/8;
+                            else mult = 36;
+                        }
+
+                        // Advanced Bets Calculation
+                        if (betType.startsWith('neighbour-')) {
+                            const parts = betType.split('-'); const target = parseInt(parts[1]); const dist = parseInt(parts[2]);
+                            const idx = wheelOrder.indexOf(target); const count = 2 * dist + 1; const covered = [];
+                            for(let k = -dist; k <= dist; k++) { let i = (idx + k) % 37; if(i < 0) i += 37; covered.push(wheelOrder[i]); }
+                            if (covered.includes(winningNumber)) { won = true; mult = 36 / count; }
+                        }
+                        else if (betType.startsWith('split-') || betType.startsWith('corner-') || betType.startsWith('sixline-')) {
+                            const nums = betType.split('-').slice(1).map(Number);
+                            if (nums.includes(winningNumber)) { won = true; mult = 36 / nums.length; }
+                        }
+
                         if (won) totalWon += (amt * mult);
                     }
 
                     if (totalBet > 0) {
-                        demoHistoryLog.unshift({ num: winningNumber, color: winningNumber === 0 ? 'green' : (redNumbers.includes(winningNumber) ? 'red' : 'black'), bet: totalBet, profit: (totalWon - totalBet) });
+                        demoHistoryLog.unshift({ 
+                            num: winningNumber, 
+                            color: winningNumber === 0 ? 'green' : (redNumbers.includes(winningNumber) ? 'red' : 'black'), 
+                            bet: totalBet, 
+                            profit: (totalWon - totalBet),
+                            betsDesc: betStrings.join(', ')
+                        });
                         if(demoHistoryLog.length > 20) demoHistoryLog.pop();
                         renderDemoHistory();
                     }
@@ -544,7 +756,8 @@ export function attachDashboard(app, client) {
                     if (totalWon > 0) { demoBalance += totalWon; Swal.fire({title: 'You Won!', text: '+$' + totalWon.toLocaleString(), icon: 'success', background: '#09090b', color: '#fff', timer: 2000, showConfirmButton: false}); }
                     else if (Object.keys(activeBets).length > 0) Swal.fire({title: 'House Wins', text: 'Better luck next time!', icon: 'error', background: '#09090b', color: '#fff', timer: 1500, showConfirmButton: false});
                     
-                    activeBets = {}; document.querySelectorAll('.r-chip').forEach(el => el.remove()); updateDemoUI();
+                    activeBets = {}; document.querySelectorAll('.r-chip').forEach(el => el.remove()); 
+                    document.getElementById('advancedBetsList').innerHTML = ''; updateDemoUI();
                 }
 
                 // ================= API CALLS & FORMS =================
@@ -570,7 +783,7 @@ export function attachDashboard(app, client) {
         res.send(renderPage(client, guild, config));
     });
 
-    // Casino Sync Route (Modified to pass ALL 500 records)
+    // Casino Sync Route
     dashboard.get('/api/casino/live', async (req, res) => {
         const guildId = req.query.guildId;
         const state = liveRouletteState.get(guildId);
