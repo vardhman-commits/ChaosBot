@@ -127,7 +127,7 @@ export function attachDashboard(app, client) {
                             <div class="flex justify-between items-start mb-6">
                                 <div>
                                     <h2 class="text-3xl font-black text-white mb-2 tracking-tight">Live Discord Casino</h2>
-                                    <p class="text-gray-400 max-w-lg mb-2">Synchronized with your server's 24/7 Dealer. Place bets using your <span class="bg-red-600 text-white text-xs px-2 py-1 rounded ml-1">DEMO BALANCE</span>.</p>
+                                    <p class="text-gray-400 max-w-lg mb-2">Synchronized with your server's 24/7 Dealer. Filter stats and place bets using your <span class="bg-red-600 text-white text-xs px-2 py-1 rounded ml-1">DEMO BALANCE</span>.</p>
                                     <p class="text-sm font-bold mt-2" id="casinoStatus"><span class="text-gray-500"><i class="fa-solid fa-spinner fa-spin"></i> Connecting to Discord...</span></p>
                                 </div>
                                 <div class="bg-[#09090b] px-6 py-4 rounded-2xl border border-green-500/30 flex flex-col items-end gap-2 shadow-xl">
@@ -179,8 +179,11 @@ export function attachDashboard(app, client) {
                                         <p class="text-[10px] text-gray-500 uppercase tracking-widest mb-1">🧊 Cold Numbers</p>
                                         <p id="statCold" class="text-blue-400 text-sm">N/A</p>
                                     </div>
-                                    <div class="bg-black/50 p-3 rounded-xl border border-white/5 overflow-hidden flex flex-col justify-center">
-                                        <p class="text-[10px] text-gray-500 uppercase tracking-widest mb-1">📜 Recent Outcomes</p>
+                                    <div class="bg-black/50 p-3 rounded-xl border border-white/5 overflow-hidden flex flex-col justify-center cursor-pointer hover:bg-white/10 transition-colors" onclick="showAllOutcomes()" title="Click to view all spins">
+                                        <p class="text-[10px] text-gray-500 uppercase tracking-widest mb-1 flex justify-between items-center">
+                                            <span>📜 Recent Outcomes</span>
+                                            <i class="fa-solid fa-expand text-[10px] text-blue-500"></i>
+                                        </p>
                                         <p id="statHistory" class="text-sm whitespace-nowrap overflow-x-auto pb-1">N/A</p>
                                     </div>
                                 </div>
@@ -243,11 +246,12 @@ export function attachDashboard(app, client) {
                                 <div class="bg-black/50 p-4 rounded-xl border border-white/5 flex flex-col justify-center">
                                     <h4 class="text-sm font-bold text-orange-400 uppercase tracking-widest mb-2"><i class="fa-solid fa-puzzle-piece mr-1"></i> Split & Corner Bets</h4>
                                     <p class="text-xs text-gray-400 leading-relaxed">
-                                        You no longer need to type combinations!<br><br>
                                         Simply <span class="text-white font-bold">hover over the grid lines and borders</span> between the numbers on the board above. Click directly on the intersections to instantly place <b>Splits</b>, <b>Corners</b>, and <b>Six Line</b> bets just like a real casino!
                                     </p>
                                 </div>
                             </div>
+                            
+                            <div id="advancedBetsList" class="mt-4 grid grid-cols-2 md:grid-cols-4 gap-2"></div>
                         </div>
                     </div>
 
@@ -397,6 +401,7 @@ export function attachDashboard(app, client) {
                 let activeBets = {}; 
                 let lastBets = {};
                 let demoHistoryLog = [];
+                let currentCasinoHistory = []; // Track globally for popups
 
                 // --- TAB NAVIGATION ---
                 function switchTab(tabId) {
@@ -428,6 +433,67 @@ export function attachDashboard(app, client) {
                     else if(casinoSyncLoop) { clearInterval(casinoSyncLoop); casinoSyncLoop = null; }
                 }
 
+                // --- POPUP LOGIC ---
+                function showAllOutcomes() {
+                    if (!currentCasinoHistory || currentCasinoHistory.length === 0) return Swal.fire({title: 'No Data', text: 'No spins recorded yet.', icon: 'info', background: '#09090b', color: '#fff'});
+                    
+                    let html = '<div class="grid grid-cols-10 gap-2 max-h-60 overflow-y-auto p-2">';
+                    currentCasinoHistory.forEach(n => {
+                        let colorClass = n === 0 ? 'bg-green-600' : (redNumbers.includes(n) ? 'bg-red-600' : 'bg-gray-800');
+                        html += \`<div class="\${colorClass} text-white font-bold py-1 rounded shadow text-sm border border-white/20">\${n}</div>\`;
+                    });
+                    html += '</div>';
+
+                    Swal.fire({
+                        title: \`Recent \${currentCasinoHistory.length} Outcomes\`,
+                        html: html,
+                        background: '#09090b',
+                        color: '#fff',
+                        width: '600px',
+                        showConfirmButton: false,
+                        showCloseButton: true
+                    });
+                }
+
+                function showBetDetails(idx) {
+                    const h = demoHistoryLog[idx];
+                    if(!h) return;
+                    
+                    let colorClass = h.color === 'green' ? 'text-green-400' : (h.color === 'red' ? 'text-red-500' : 'text-gray-400');
+                    let profitText = h.profit > 0 ? \`<span class="text-green-400">+$out\${h.profit.toLocaleString()}</span>\` : (h.profit < 0 ? \`<span class="text-red-400">-$out\${Math.abs(h.profit).toLocaleString()}</span>\` : \`<span class="text-gray-500">$0</span>\`);
+                    profitText = profitText.replace('out', ''); // literal replacement
+
+                    let html = \`
+                    <div class="text-left space-y-4">
+                        <div class="flex justify-between items-center bg-white/5 p-4 rounded-xl border border-white/10">
+                            <div>
+                                <p class="text-xs text-gray-500 uppercase tracking-widest font-bold">Winning Number</p>
+                                <p class="text-4xl font-black \${colorClass}">\${h.num}</p>
+                            </div>
+                            <div class="text-right">
+                                <p class="text-xs text-gray-500 uppercase tracking-widest font-bold">Net Profit</p>
+                                <p class="text-2xl font-black">\${profitText}</p>
+                            </div>
+                        </div>
+                        <div>
+                            <p class="text-xs text-gray-500 uppercase tracking-widest font-bold mb-2">Total Bet: $\${h.bet.toLocaleString()}</p>
+                            <div class="bg-black/50 p-3 rounded-lg border border-white/5 text-sm text-gray-300 leading-relaxed max-h-40 overflow-y-auto">
+                                \${h.betsDesc}
+                            </div>
+                        </div>
+                    </div>
+                    \`;
+
+                    Swal.fire({
+                        title: 'Round Summary',
+                        html: html,
+                        background: '#09090b',
+                        color: '#fff',
+                        showConfirmButton: false,
+                        showCloseButton: true
+                    });
+                }
+
                 // --- CASINO LOGIC ---
                 if(localStorage.getItem('chaosDemoBalance')) demoBalance = parseInt(localStorage.getItem('chaosDemoBalance'));
                 function updateDemoUI() { document.getElementById('demoBalanceDisplay').innerText = '$' + demoBalance.toLocaleString(); localStorage.setItem('chaosDemoBalance', demoBalance); }
@@ -453,6 +519,7 @@ export function attachDashboard(app, client) {
                             el.appendChild(chipEl);
                         }
                     }
+                    renderAdvancedBets();
                     updateDemoUI();
                 }
 
@@ -474,6 +541,24 @@ export function attachDashboard(app, client) {
                     demoBalance -= cost;
                     activeBets = {...lastBets};
                     renderAllChips();
+                }
+
+                function renderAdvancedBets() {
+                    let el = document.getElementById('advancedBetsList');
+                    let html = '';
+                    for(const [k, v] of Object.entries(activeBets)) {
+                        if(['red', 'black', 'even', 'odd', '1-18', '19-36', '1-12', '13-24', '25-36', 'col1', 'col2', 'col3', 'voisins', 'tiers', 'orphelins'].includes(k) || !isNaN(k)) continue; 
+                        let label = k;
+                        if(k.startsWith('neighbour-')) label = \`Neighbours (\${k.split('-')[1]} ±\${k.split('-')[2]})\`;
+                        if(k.startsWith('split-')) label = \`Split (\${k.split('-').slice(1).join(',')})\`;
+                        if(k.startsWith('corner-')) label = \`Corner (\${k.split('-').slice(1).join(',')})\`;
+                        if(k.startsWith('sixline-')) label = \`Six Line (\${k.split('-').slice(1).join(',')})\`;
+
+                        html += \`<div class="bg-white/5 px-3 py-1.5 rounded-lg text-[11px] border border-white/10 flex justify-between">
+                            <span class="text-gray-300 font-bold">\${label}</span> <span class="text-green-400 font-black">$\${v.toLocaleString()}</span>
+                        </div>\`;
+                    }
+                    el.innerHTML = html;
                 }
 
                 function placeBet(type) {
@@ -541,12 +626,12 @@ export function attachDashboard(app, client) {
                     const list = document.getElementById('demoHistoryList');
                     if(demoHistoryLog.length === 0) { list.innerHTML = '<p class="text-gray-600 italic">Place a bet to record history...</p>'; return; }
                     let htm = '';
-                    demoHistoryLog.forEach(h => {
+                    demoHistoryLog.forEach((h, idx) => {
                         let colorClass = h.color === 'green' ? 'bg-green-600' : (h.color === 'red' ? 'bg-red-600' : 'bg-gray-800');
                         let profitText = h.profit > 0 ? \`<span class="text-green-400">+$out\${h.profit.toLocaleString()}</span>\` : (h.profit < 0 ? \`<span class="text-red-400">-$out\${Math.abs(h.profit).toLocaleString()}</span>\` : \`<span class="text-gray-500">$0</span>\`);
-                        profitText = profitText.replace('out', ''); // string literal hack
+                        profitText = profitText.replace('out', '');
                         
-                        htm += \`<div class="bg-black/50 p-2 rounded border border-white/5 mb-2">
+                        htm += \`<div class="bg-black/50 p-2 rounded border border-white/5 mb-2 cursor-pointer hover:bg-white/10 transition-colors" onclick="showBetDetails(\${idx})">
                             <div class="flex justify-between items-center mb-1">
                                 <div class="flex items-center gap-2">
                                     <span class="\${colorClass} text-white w-6 h-6 flex items-center justify-center rounded-full text-[10px] shadow">\${h.num}</span>
@@ -578,6 +663,7 @@ export function attachDashboard(app, client) {
                             // FILTER & STATS CALCULATION
                             const filterCount = parseInt(document.getElementById('spinCountFilter').value) || 100;
                             const history = data.history.slice(-filterCount);
+                            currentCasinoHistory = history; // save for popup
                             
                             if (history && history.length > 0) {
                                 let r=0, b=0, g=0, odd=0, even=0, low=0, high=0, d1=0, d2=0, d3=0, c1=0, c2=0, c3=0; let freq = {};
@@ -619,7 +705,7 @@ export function attachDashboard(app, client) {
                             } 
                             else if (data.status === 'spinning' && currentCasinoPhase !== 'spinning') {
                                 currentCasinoPhase = 'spinning'; 
-                                lastBets = {...activeBets}; // Save for repeat bet
+                                lastBets = {...activeBets}; 
                                 document.getElementById('casinoStatus').innerHTML = '<span class="text-yellow-500 font-black">WHEEL IS SPINNING!</span>'; 
                                 document.getElementById('boardOverlay').classList.remove('hidden'); 
                                 document.getElementById('advOverlay').classList.remove('hidden'); 
@@ -630,7 +716,6 @@ export function attachDashboard(app, client) {
                     }, 1000);
                 }
 
-                // NEW SPIN ANIMATION
                 async function triggerDashboardSpin(winningNumber) {
                     const wheel = document.getElementById('wheelNumber'); 
                     const wheelBox = document.getElementById('wheelBox');
@@ -694,6 +779,7 @@ export function attachDashboard(app, client) {
                         if(betType.startsWith('split-')) displayLabel = \`SPLIT(\${betType.split('-').slice(1).join(',')})\`;
                         if(betType.startsWith('corner-')) displayLabel = \`CORNER(\${betType.split('-').slice(1).join(',')})\`;
                         if(betType.startsWith('sixline-')) displayLabel = \`SIXLINE(\${betType.split('-').slice(1).join(',')})\`;
+                        if(betType.startsWith('neighbour-')) displayLabel = \`NB(\${betType.split('-')[1]}±\${betType.split('-')[2]})\`;
                         betStrings.push(\`\${displayLabel} ($\${amt >= 1000 ? (amt/1000)+'k' : amt})\`);
                         
                         // Base Bets
@@ -709,12 +795,18 @@ export function attachDashboard(app, client) {
                         }
 
                         // Advanced Bets Calculation
-                        if (betType.startsWith('split-') || betType.startsWith('corner-') || betType.startsWith('sixline-')) {
+                        if (betType.startsWith('neighbour-')) {
+                            const parts = betType.split('-'); const target = parseInt(parts[1]); const dist = parseInt(parts[2]);
+                            const idx = wheelOrder.indexOf(target); const count = 2 * dist + 1; const covered = [];
+                            for(let k = -dist; k <= dist; k++) { let i = (idx + k) % 37; if(i < 0) i += 37; covered.push(wheelOrder[i]); }
+                            if (covered.includes(winningNumber)) { won = true; mult = 36 / count; }
+                        }
+                        else if (betType.startsWith('split-') || betType.startsWith('corner-') || betType.startsWith('sixline-')) {
                             const nums = betType.split('-').slice(1).map(Number);
                             if (nums.includes(winningNumber)) { 
                                 won = true; mult = 36 / nums.length; 
                                 let el = document.querySelector(\`[data-bet="\${betType}"]\`);
-                                if(el) el.classList.add('win-highlight'); // Highlight winning intersections!
+                                if(el) el.classList.add('win-highlight'); 
                             }
                         }
 
@@ -737,7 +829,7 @@ export function attachDashboard(app, client) {
                     else if (Object.keys(activeBets).length > 0) Swal.fire({title: 'House Wins', text: 'Better luck next time!', icon: 'error', background: '#09090b', color: '#fff', timer: 1500, showConfirmButton: false});
                     
                     activeBets = {}; document.querySelectorAll('.r-chip').forEach(el => el.remove()); 
-                    updateDemoUI();
+                    document.getElementById('advancedBetsList').innerHTML = ''; updateDemoUI();
                 }
 
                 // ================= API CALLS & FORMS =================
