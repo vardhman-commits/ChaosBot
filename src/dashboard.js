@@ -244,3 +244,4 @@ export function attachDashboard(app, client) {
     // Attach the locked dashboard Router to the main Express app at /admin
     app.use('/admin', dashboard);
 }
+
