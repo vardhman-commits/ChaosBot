@@ -4,7 +4,7 @@ import { InteractionHelper } from '../../utils/interactionHelper.js';
 import EconomyService from '../../services/economyService.js';
 import { getEconomyData } from '../../utils/economy.js';
 import { getGuildConfig, updateGuildConfig } from '../../services/guildConfig.js';
-import db from '../../utils/database.js';
+import { db } from '../../utils/database.js';
 
 const RED_NUMBERS = [1, 3, 5, 7, 9, 12, 14, 16, 18, 19, 21, 23, 25, 27, 30, 32, 34, 36];
 
