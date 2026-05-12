@@ -61,7 +61,7 @@ export default {
             const now = Date.now();
             if (channelCreationCooldown.has(cooldownKey)) {
                 const lastCreation = channelCreationCooldown.get(cooldownKey);
-if (now - lastCreation < VOICE_CREATE_COOLDOWN_MS) {
+                if (now - lastCreation < VOICE_CREATE_COOLDOWN_MS) {
                     logger.warn(`User ${member.id} is on cooldown for channel creation`);
                     return;
                 }
@@ -108,6 +108,9 @@ if (now - lastCreation < VOICE_CREATE_COOLDOWN_MS) {
             if (channel.members.size === 0) {
                 await deleteTemporaryChannel(client, channel, state.guild.id);
             } else if (tempChannelInfo.ownerId === member.id) {
+                // Remove the old owner's special permissions
+                await channel.permissionOverwrites.delete(member.id).catch(() => null);
+
                 const nextMember = channel.members.first();
                 if (nextMember) {
                     await transferChannelOwnership(client, channel, state.guild.id, nextMember.id);
@@ -123,6 +126,9 @@ if (now - lastCreation < VOICE_CREATE_COOLDOWN_MS) {
                     if (oldState.channel.members.size === 0) {
                         await deleteTemporaryChannel(client, oldState.channel, oldState.guild.id);
                     } else if (tempChannelInfo.ownerId === oldState.member.id) {
+                        // Remove the old owner's special permissions
+                        await oldState.channel.permissionOverwrites.delete(oldState.member.id).catch(() => null);
+
                         const nextMember = oldState.channel.members.first();
                         if (nextMember) {
                             await transferChannelOwnership(client, oldState.channel, oldState.guild.id, nextMember.id);
@@ -181,18 +187,29 @@ if (now - lastCreation < VOICE_CREATE_COOLDOWN_MS) {
 
                 const tempChannel = await guild.channels.create({
                     name: channelName,
-type: ChannelType.GuildVoice,
+                    type: ChannelType.GuildVoice,
                     parent: triggerChannel.parentId,
-userLimit: userLimit === 0 ? undefined : userLimit,
+                    userLimit: userLimit === 0 ? undefined : userLimit,
                     bitrate: bitrate,
                     permissionOverwrites: [
                         {
-                            id: member.id,
-                            allow: ['Connect', 'Speak', 'PrioritySpeaker', 'MoveMembers']
+                            // Everyone else can connect and speak normally
+                            id: guild.roles.everyone.id,
+                            allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.Connect, PermissionFlagsBits.Speak]
                         },
                         {
-                            id: guild.id,
-                            allow: ['Connect', 'Speak']
+                            // Give the creator FULL Private VC permissions
+                            id: member.id,
+                            allow: [
+                                PermissionFlagsBits.ViewChannel,
+                                PermissionFlagsBits.Connect, 
+                                PermissionFlagsBits.Speak, 
+                                PermissionFlagsBits.PrioritySpeaker, 
+                                PermissionFlagsBits.ManageChannels, // Edit channel name, size, bit rate, and lock
+                                PermissionFlagsBits.MoveMembers,    // Drag, kick, disconnect users
+                                PermissionFlagsBits.MuteMembers,
+                                PermissionFlagsBits.DeafenMembers
+                            ]
                         }
                     ]
                 });
@@ -206,6 +223,11 @@ userLimit: userLimit === 0 ? undefined : userLimit,
                 }
 
                 logger.info(`Created temporary voice channel ${tempChannel.name} (${tempChannel.id}) for user ${member.user.tag} in guild ${guild.name} with user limit ${userLimit}`);
+
+                // Send instructions to the voice channel's text chat
+                await tempChannel.send({ 
+                    content: `🎉 Welcome to your private room, <@${member.id}>!\n\n👑 **You are the Owner**. You have permissions to:\n- ✏️ **Edit channel name & limit** (Right-click channel -> Edit Channel)\n- 🔒 **Lock the channel** (Permissions -> Everyone -> ❌ Connect)\n- 🥾 **Drag/Disconnect users**`
+                }).catch(() => null);
 
             } catch (error) {
                 logger.error(`Failed to create temporary channel for user ${member.user.tag} in guild ${guild.name}:`, error);
@@ -248,7 +270,7 @@ userLimit: userLimit === 0 ? undefined : userLimit,
                 const newOwner = await channel.guild.members.fetch(newOwnerId);
                 if (newOwner) {
                     const channelOptions = config.channelOptions?.[tempChannelInfo.triggerChannelId] || {};
-                    const nameTemplate = channelOptions.nameTemplate || config.channelNameTemplate;
+                    const nameTemplate = channelOptions.nameTemplate || config.channelNameTemplate || "{username}'s Room";
                     
                     const newChannelName = sanitizeVoiceChannelName(formatChannelName(nameTemplate, {
                         username: newOwner.user.username,
@@ -259,6 +281,23 @@ userLimit: userLimit === 0 ? undefined : userLimit,
                     }));
 
                     await channel.setName(newChannelName);
+
+                    // Grant the new owner all the Private VC permissions
+                    await channel.permissionOverwrites.edit(newOwner.id, {
+                        ViewChannel: true,
+                        Connect: true,
+                        Speak: true,
+                        PrioritySpeaker: true,
+                        ManageChannels: true,
+                        MoveMembers: true,
+                        MuteMembers: true,
+                        DeafenMembers: true
+                    });
+
+                    // Announce the transfer
+                    await channel.send({ 
+                        content: `👑 The previous owner left. <@${newOwner.id}> has automatically been granted **Ownership** of this room! You can now drag people and edit the channel settings.`
+                    }).catch(() => null);
                 }
 
                 logger.info(`Transferred ownership of temporary channel ${channel.id} to user ${newOwnerId}`);
@@ -308,6 +347,3 @@ function trimCooldownMapIfNeeded() {
         channelCreationCooldown.delete(entries[index][0]);
     }
 }
-
-
-
