@@ -1,13 +1,14 @@
 import { SlashCommandBuilder, ButtonBuilder, ButtonStyle, ActionRowBuilder, MessageFlags } from 'discord.js';
 import { createEmbed } from '../../utils/embeds.js';
 import { logger } from '../../utils/logger.js';
-
 import { InteractionHelper } from '../../utils/interactionHelper.js';
-const SUPPORT_SERVER_URL = "https://discord.gg/QnWNz2dKCE";
+
+const SUPPORT_SERVER_URL = "https://discord.gg/chaosclub";
+
 export default {
     data: new SlashCommandBuilder()
     .setName("support")
-    .setDescription("Get link to the support server"),
+    .setDescription("Get a link to the support server"),
 
   async execute(interaction) {
     try {
@@ -20,7 +21,10 @@ export default {
 
       await InteractionHelper.safeReply(interaction, {
         embeds: [
-          createEmbed({ title: "🚑 Need Help?", description: "Join our official support server for assistance, report bugs, or suggest features. If you are customizing this bot, remember to change the link in the code!" }),
+          createEmbed({ 
+            title: "🚑 Need Help?", 
+            description: "Join the official Chaos Club support server for assistance, reporting bugs, or suggesting new features!" 
+          }),
         ],
         components: [actionRow],
         flags: MessageFlags.Ephemeral,
@@ -39,8 +43,3 @@ export default {
     }
   },
 };
-
-
-
-
-
