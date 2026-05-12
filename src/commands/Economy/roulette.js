@@ -81,13 +81,11 @@ function getTableStats(history) {
 // --- BOOT PROCESS: WAKE UP THE DEALERS ---
 export async function startPersistentRoulettes(client) {
     try {
-        // Broadened query to bypass JSONB syntax issues
-        const query = `SELECT guild_id, config FROM guild_configs;`;
-        const result = await db.query(query);
-
-        for (const row of result.rows) {
-            const guildId = row.guild_id;
-            const config = row.config || {};
+        // Iterate over cached guilds safely instead of relying on direct SQL queries
+        // This perfectly solves the "db.query is not a function" error.
+        for (const guild of client.guilds.cache.values()) {
+            const guildId = guild.id;
+            const config = await getGuildConfig(client, guildId);
             const channelId = config.rouletteChannel;
 
             if (channelId && !activeRouletteServers.has(guildId)) {
