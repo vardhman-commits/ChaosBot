@@ -1,9 +1,3 @@
-
-
-
-
-
-
 import {
     getJoinToCreateConfig,
     saveJoinToCreateConfig,
@@ -29,12 +23,6 @@ const ALLOWED_TEMPLATE_PLACEHOLDERS = new Set([
     '{channelName}',
     '{channel_name}'
 ]);
-
-
-
-
-
-
 
 export function validateChannelNameTemplate(template) {
     if (!template || typeof template !== 'string') {
@@ -79,12 +67,6 @@ export function validateChannelNameTemplate(template) {
     return true;
 }
 
-
-
-
-
-
-
 export function validateBitrate(bitrate) {
     const bitrateNum = parseInt(bitrate);
 
@@ -107,12 +89,6 @@ export function validateBitrate(bitrate) {
     return true;
 }
 
-
-
-
-
-
-
 export function validateUserLimit(limit) {
     const limitNum = parseInt(limit);
 
@@ -134,13 +110,6 @@ export function validateUserLimit(limit) {
 
     return true;
 }
-
-
-
-
-
-
-
 
 export function formatChannelName(template, variables) {
     try {
@@ -187,7 +156,6 @@ export function formatChannelName(template, variables) {
         }
 
         // Final sanitization: preserve emojis but remove Discord-forbidden characters
-        // Discord allows emojis but not @#:` and control characters
         formatted = formatted
             .normalize('NFKC')
             .replace(CONTROL_AND_INVISIBLE_CHARS_REGEX, '')
@@ -195,7 +163,6 @@ export function formatChannelName(template, variables) {
             .replace(/\s+/g, ' ')
             .trim();
 
-        
         if (formatted.length === 0) {
             formatted = 'Voice Channel';
         } else if (formatted.length > CHANNEL_NAME_MAX_LENGTH) {
@@ -210,14 +177,6 @@ export function formatChannelName(template, variables) {
         throw error;
     }
 }
-
-
-
-
-
-
-
-
 
 export async function initializeJoinToCreate(client, guildId, channelId, options = {}) {
     try {
@@ -237,7 +196,6 @@ export async function initializeJoinToCreate(client, guildId, channelId, options
             );
         }
 
-        
         if (options.nameTemplate) {
             validateChannelNameTemplate(options.nameTemplate);
         }
@@ -306,14 +264,6 @@ export async function initializeJoinToCreate(client, guildId, channelId, options
     }
 }
 
-
-
-
-
-
-
-
-
 export async function updateChannelConfig(client, guildId, channelId, updates) {
     try {
         if (!client || !client.db) {
@@ -334,7 +284,6 @@ export async function updateChannelConfig(client, guildId, channelId, updates) {
             );
         }
 
-        
         if (updates.nameTemplate) {
             validateChannelNameTemplate(updates.nameTemplate);
         }
@@ -375,13 +324,6 @@ export async function updateChannelConfig(client, guildId, channelId, updates) {
     }
 }
 
-
-
-
-
-
-
-
 export async function removeTriggerChannel(client, guildId, channelId) {
     try {
         if (!client || !client.db) {
@@ -410,7 +352,6 @@ export async function removeTriggerChannel(client, guildId, channelId) {
             delete config.channelOptions[channelId];
         }
 
-        
         if (config.temporaryChannels) {
             for (const [tempChannelId, tempInfo] of Object.entries(config.temporaryChannels)) {
                 if (tempInfo.triggerChannelId === channelId) {
@@ -437,13 +378,6 @@ export async function removeTriggerChannel(client, guildId, channelId) {
     }
 }
 
-
-
-
-
-
-
-
 export async function getConfiguration(client, guildId) {
     try {
         if (!client || !client.db) {
@@ -468,13 +402,6 @@ export async function getConfiguration(client, guildId) {
     }
 }
 
-
-
-
-
-
-
-
 export async function isTriggerChannel(client, guildId, channelId) {
     try {
         const config = await getConfiguration(client, guildId);
@@ -484,14 +411,6 @@ export async function isTriggerChannel(client, guildId, channelId) {
         return false;
     }
 }
-
-
-
-
-
-
-
-
 
 export async function getChannelConfiguration(client, guildId, channelId) {
     try {
@@ -522,11 +441,6 @@ export async function getChannelConfiguration(client, guildId, channelId) {
     }
 }
 
-
-
-
-
-
 export function hasManageGuildPermission(member) {
     try {
         if (!member || !member.permissions) {
@@ -538,14 +452,6 @@ export function hasManageGuildPermission(member) {
         return false;
     }
 }
-
-
-
-
-
-
-
-
 
 export async function logConfigurationChange(client, guildId, userId, action, details) {
     try {
@@ -566,14 +472,6 @@ export async function logConfigurationChange(client, guildId, userId, action, de
     }
 }
 
-
-
-
-
-
-
-
-
 export async function createTemporaryChannel(guild, member, options = {}) {
     try {
         if (!guild || !member) {
@@ -590,7 +488,6 @@ export async function createTemporaryChannel(guild, member, options = {}) {
             parentId
         } = options;
 
-        
         if (nameTemplate) {
             validateChannelNameTemplate(nameTemplate);
         }
@@ -601,7 +498,6 @@ export async function createTemporaryChannel(guild, member, options = {}) {
             validateBitrate(bitrate / 1000);
         }
 
-        
         const channelName = formatChannelName(nameTemplate || '{username}\'s Room', {
             username: member.user.username,
             displayName: member.displayName,
@@ -609,7 +505,7 @@ export async function createTemporaryChannel(guild, member, options = {}) {
             guildName: guild.name
         });
 
-        
+        // CREATE CHANNEL WITH ADVANCED PERMISSIONS
         const tempChannel = await guild.channels.create({
             name: channelName,
             type: ChannelType.GuildVoice,
@@ -618,17 +514,33 @@ export async function createTemporaryChannel(guild, member, options = {}) {
             bitrate: bitrate || 64000,
             permissionOverwrites: [
                 {
-                    id: member.id,
-                    allow: [PermissionFlagsBits.Connect, PermissionFlagsBits.Speak, PermissionFlagsBits.PrioritySpeaker, PermissionFlagsBits.MoveMembers]
-                },
-                {
+                    // Everyone else can just view/connect
                     id: guild.id,
                     allow: [PermissionFlagsBits.Connect, PermissionFlagsBits.Speak]
+                },
+                {
+                    // The Creator gets FULL control of their private room
+                    id: member.id,
+                    allow: [
+                        PermissionFlagsBits.ViewChannel,
+                        PermissionFlagsBits.Connect,
+                        PermissionFlagsBits.Speak,
+                        PermissionFlagsBits.PrioritySpeaker,
+                        PermissionFlagsBits.ManageChannels, // Allows them to rename, resize, lock
+                        PermissionFlagsBits.MoveMembers,    // Allows them to kick/drag users
+                        PermissionFlagsBits.MuteMembers,
+                        PermissionFlagsBits.DeafenMembers
+                    ]
                 }
             ]
         });
 
         logger.info(`Created temporary voice channel ${tempChannel.name} (${tempChannel.id}) for user ${member.user.tag}`);
+
+        // Send instructions to the text-in-voice
+        await tempChannel.send({ 
+            content: `🎉 Welcome to your private room, <@${member.id}>!\n\n👑 **You are the Owner**. You have permissions to:\n- ✏️ **Edit channel name & limit** (Right-click channel -> Edit Channel)\n- 🔒 **Lock the channel** (Permissions -> Everyone -> ❌ Connect)\n- 🥾 **Drag/Disconnect users**`
+        }).catch(() => null);
 
         return {
             id: tempChannel.id,
