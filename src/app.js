@@ -12,23 +12,18 @@ import { logger, startupLog, shutdownLog } from './utils/logger.js';
 import { checkBirthdays } from './services/birthdayService.js';
 import { checkGiveaways } from './services/giveawayService.js';
 import { loadCommands, registerCommands as registerSlashCommands } from './handlers/commandLoader.js';
+import { attachDashboard } from './dashboard.js'; // 👈 Dashboard imported here!
 
 class TitanBot extends Client {
   constructor() {
     super({
       intents: [
-        
         GatewayIntentBits.Guilds,                        
         GatewayIntentBits.GuildMembers,                 
-        
-        
         GatewayIntentBits.GuildMessages,                
         GatewayIntentBits.GuildMessageReactions,        
         GatewayIntentBits.MessageContent,               
-        
         GatewayIntentBits.GuildVoiceStates,             
-        
-        
         GatewayIntentBits.GuildBans,                    
       ],
     });
@@ -190,6 +185,9 @@ class TitanBot extends Client {
       });
     });
 
+    // 👈 DASHBOARD ATTACHED HERE
+    attachDashboard(app, this);
+
     const startServer = (port, attempt = 0) => {
       let hasStartedListening = false;
       const server = app.listen(port, host, () => {
@@ -198,6 +196,7 @@ class TitanBot extends Client {
         startupLog(`✅ Web Server running on ${host}:${port}`);
         startupLog(`Health endpoint: http://localhost:${port}/health`);
         startupLog(`Ready endpoint: http://localhost:${port}/ready`);
+        startupLog(`Admin Dashboard: http://localhost:${port}/admin`); // Added log!
       });
 
       server.on('error', (error) => {
@@ -258,7 +257,6 @@ class TitanBot extends Client {
           }
         }
         
-        // Save cleaned counters if any were orphaned
         if (orphanedCounters.length > 0) {
           await saveServerCounters(this, guildId, validCounters);
           logger.info(`Cleaned up ${orphanedCounters.length} orphaned counter(s) from guild ${guildId} during scheduled update`);
@@ -314,12 +312,10 @@ class TitanBot extends Client {
     logger.info(`${'='.repeat(60)}`);
 
     try {
-      
       logger.info('Stopping cron jobs...');
       cron.getTasks().forEach(task => task.stop());
       logger.info('✅ Cron jobs stopped');
 
-      // Close database connection
       if (this.db && this.db.db) {
         logger.info('Closing database connection...');
         try {
@@ -332,21 +328,18 @@ class TitanBot extends Client {
         }
       }
 
-      
       logger.info('Destroying Discord client...');
       if (this.isReady()) {
         try {
           this.destroy();
           logger.info('✅ Discord client destroyed');
         } catch (error) {
-          
-          
           logger.warn('Discord client destroy warning (non-critical):', error.message);
         }
       }
 
       logger.info('✅ Graceful shutdown complete');
-  shutdownLog('Bot stopped successfully.');
+      shutdownLog('Bot stopped successfully.');
       process.exit(0);
     } catch (error) {
       logger.error('Error during graceful shutdown:', error);
@@ -381,6 +374,3 @@ try {
 }
 
 export default TitanBot;
-
-
-
