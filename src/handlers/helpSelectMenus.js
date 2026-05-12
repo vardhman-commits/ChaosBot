@@ -3,7 +3,7 @@ import { createButton, getPaginationRow } from '../utils/components.js';
 import fs from 'fs/promises';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { Collection, ActionRowBuilder, MessageFlags } from 'discord.js';
+import { Collection, ActionRowBuilder, MessageFlags, PermissionFlagsBits } from 'discord.js'; // Added PermissionFlagsBits
 import { logger } from '../utils/logger.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -36,9 +36,24 @@ const CATEGORY_ICONS = {
     Config: "⚙️",
 };
 
+// 🚨 SECURITY: Define which categories normal players are NOT allowed to see
+const CATEGORY_PERMISSIONS = {
+    Moderation: true,
+    Welcome: true,
+    Giveaway: true,
+    Counter: true,
+    Reaction_Roles: true,
+    Config: true
+};
+
 function buildHelpEntries(command, category) {
     const commandData = normalizeCommandData(command);
     if (!commandData?.name) {
+        return [];
+    }
+
+    // 🚨 SECURITY: Hide individual commands strictly locked to Admins
+    if (commandData.default_member_permissions === String(PermissionFlagsBits.Administrator)) {
         return [];
     }
 
@@ -109,10 +124,24 @@ function normalizeCommandData(command) {
     };
 }
 
-async function createCategoryCommandsMenu(category, client) {
-    const categoryName =
-        category.charAt(0).toUpperCase() + category.slice(1).toLowerCase();
+// 🚨 FIX: Pass 'member' to check their permissions
+async function createCategoryCommandsMenu(category, client, member) {
+    const categoryName = category.charAt(0).toUpperCase() + category.slice(1).toLowerCase();
     const icon = CATEGORY_ICONS[categoryName] || "🔍";
+
+    // 🚨 SECURITY: If category is Admin-only, block non-admins from viewing it
+    const isAdminOnly = CATEGORY_PERMISSIONS[categoryName];
+    const isAdmin = member ? (member.permissions.has(PermissionFlagsBits.Administrator) || member.permissions.has(PermissionFlagsBits.ManageGuild)) : false;
+
+    if (isAdminOnly && !isAdmin) {
+        const embed = createEmbed({
+            title: '❌ Access Denied',
+            description: 'You do not have permission to view this command category.',
+            color: 'error'
+        });
+        const backButton = createButton(BACK_BUTTON_ID, "Back", "primary", "⬅️", false);
+        return { embeds: [embed], components: [new ActionRowBuilder().addComponents(backButton)] };
+    }
 
     const categoryCommands = [];
 
@@ -129,20 +158,12 @@ async function createCategoryCommandsMenu(category, client) {
             const commandData = normalizeCommandData(command);
 
             if (commandData) {
-                if (
-                    commandData.name === "help" ||
-                    commandData.name === "commandlist"
-                )
-                    continue;
-
+                if (commandData.name === "help" || commandData.name === "commandlist") continue;
                 categoryCommands.push(...buildHelpEntries(command, categoryName));
             }
         }
     } catch (error) {
-        logger.error(
-            `Error reading commands from category ${category}:`,
-            error,
-        );
+        logger.error(`Error reading commands from category ${category}:`, error);
     }
 
     categoryCommands.sort((a, b) => a.displayName.localeCompare(b.displayName));
@@ -179,11 +200,7 @@ async function createCategoryCommandsMenu(category, client) {
 
         const maxLength = 1000;
         if (commandMentions.length <= maxLength) {
-            embed.addFields({
-                name: "Commands",
-                value: commandMentions,
-                inline: false,
-            });
+            embed.addFields({ name: "Commands", value: commandMentions, inline: false });
         } else {
             const chunks = [];
             let currentChunk = "";
@@ -200,11 +217,7 @@ async function createCategoryCommandsMenu(category, client) {
             if (currentChunk) chunks.push(currentChunk);
 
             chunks.forEach((chunk, index) => {
-                embed.addFields({
-                    name: `Commands (Part ${index + 1})`,
-                    value: chunk,
-                    inline: false,
-                });
+                embed.addFields({ name: `Commands (Part ${index + 1})`, value: chunk, inline: false });
             });
         }
     }
@@ -212,41 +225,35 @@ async function createCategoryCommandsMenu(category, client) {
     embed.setFooter({ text: FOOTER_TEXT });
     embed.setTimestamp();
 
-    const backButton = createButton(
-        BACK_BUTTON_ID,
-        "Back",
-        "primary",
-        "⬅️",
-        false,
-    );
-
+    const backButton = createButton(BACK_BUTTON_ID, "Back", "primary", "⬅️", false);
     const buttonRow = new ActionRowBuilder().addComponents(backButton);
 
-    return {
-        embeds: [embed],
-        components: [buttonRow],
-    };
+    return { embeds: [embed], components: [buttonRow] };
 }
 
-export async function createAllCommandsMenu(page = 1, client) {
+// 🚨 FIX: Pass 'member' to filter the "All Commands" list
+export async function createAllCommandsMenu(page = 1, client, member) {
     const commandsPerPage = 45;
     const allCommands = [];
 
+    const isAdmin = member ? (member.permissions.has(PermissionFlagsBits.Administrator) || member.permissions.has(PermissionFlagsBits.ManageGuild)) : false;
+
     const commandsPath = path.join(__dirname, "../commands");
-    const categoryDirs = (
-        await fs.readdir(commandsPath, { withFileTypes: true })
-    )
+    const categoryDirs = (await fs.readdir(commandsPath, { withFileTypes: true }))
         .filter((dirent) => dirent.isDirectory())
         .map((dirent) => dirent.name)
         .sort();
 
     for (const category of categoryDirs) {
+        const categoryName = category.charAt(0).toUpperCase() + category.slice(1).toLowerCase();
+        
+        // 🚨 SECURITY: Skip reading Admin folders if the user is not an Admin!
+        if (CATEGORY_PERMISSIONS[categoryName] && !isAdmin) {
+            continue;
+        }
+
         try {
-            const categoryPath = path.join(
-                __dirname,
-                "../commands",
-                category,
-            );
+            const categoryPath = path.join(__dirname, "../commands", category);
             const commandFiles = (await fs.readdir(categoryPath))
                 .filter((file) => file.endsWith(".js"))
                 .sort();
@@ -258,24 +265,12 @@ export async function createAllCommandsMenu(page = 1, client) {
                 const commandData = normalizeCommandData(command);
 
                 if (commandData) {
-                    if (
-                        commandData.name === "help" ||
-                        commandData.name === "commandlist"
-                    )
-                        continue;
-
-                    const categoryName =
-                        category.charAt(0).toUpperCase() +
-                        category.slice(1).toLowerCase();
-
+                    if (commandData.name === "help" || commandData.name === "commandlist") continue;
                     allCommands.push(...buildHelpEntries(command, categoryName));
                 }
             }
         } catch (error) {
-            logger.error(
-                `Error reading commands from category ${category}:`,
-                error,
-            );
+            logger.error(`Error reading commands from category ${category}:`, error);
         }
     }
 
@@ -293,14 +288,15 @@ export async function createAllCommandsMenu(page = 1, client) {
         logger.error('Error fetching registered commands:', error);
     }
 
-    const totalPages = Math.ceil(allCommands.length / commandsPerPage);
+    // Protect against empty arrays causing NaN pages
+    const totalPages = Math.ceil(allCommands.length / commandsPerPage) || 1;
     const startIndex = (page - 1) * commandsPerPage;
     const endIndex = startIndex + commandsPerPage;
     const pageCommands = allCommands.slice(startIndex, endIndex);
 
     const embed = createEmbed({
         title: "📋 All Commands",
-        description: `(${allCommands.length} total commands, including subcommands)`
+        description: `(${allCommands.length} total commands available to you)`
     });
 
     embed.setFooter({ text: FOOTER_TEXT });
@@ -319,10 +315,7 @@ export async function createAllCommandsMenu(page = 1, client) {
         const chunkSize = Math.ceil(commandMentions.length / columnCount);
 
         for (let i = 0; i < columnCount; i++) {
-            const chunk = commandMentions
-                .slice(i * chunkSize, (i + 1) * chunkSize)
-                .join("\n");
-
+            const chunk = commandMentions.slice(i * chunkSize, (i + 1) * chunkSize).join("\n");
             if (!chunk) continue;
 
             embed.addFields({
@@ -336,31 +329,15 @@ export async function createAllCommandsMenu(page = 1, client) {
     const components = [];
 
     if (totalPages > 1) {
-        const paginationRow = getPaginationRow(
-            PAGINATION_PREFIX,
-            page,
-            totalPages,
-        );
+        const paginationRow = getPaginationRow(PAGINATION_PREFIX, page, totalPages);
         components.push(paginationRow);
     }
 
-    const backButton = createButton(
-        BACK_BUTTON_ID,
-        "Back",
-        "primary",
-        "⬅️",
-        false,
-    );
-
+    const backButton = createButton(BACK_BUTTON_ID, "Back", "primary", "⬅️", false);
     const buttonRow = new ActionRowBuilder().addComponents(backButton);
     components.push(buttonRow);
 
-    return {
-        embeds: [embed],
-        components,
-        currentPage: page,
-        totalPages,
-    };
+    return { embeds: [embed], components, currentPage: page, totalPages };
 }
 
 export const helpCategorySelectMenu = {
@@ -374,26 +351,16 @@ export const helpCategorySelectMenu = {
             const selectedCategory = interaction.values[0];
 
             if (selectedCategory === ALL_COMMANDS_ID) {
-                const { embeds, components } = await createAllCommandsMenu(1, client);
-                await interaction.editReply({
-                    embeds,
-                    components,
-                });
+                // 🚨 FIX: Pass interaction.member
+                const { embeds, components } = await createAllCommandsMenu(1, client, interaction.member);
+                await interaction.editReply({ embeds, components });
             } else {
-                const { embeds, components } = await createCategoryCommandsMenu(selectedCategory, client);
-                await interaction.editReply({
-                    embeds,
-                    components,
-                });
+                // 🚨 FIX: Pass interaction.member
+                const { embeds, components } = await createCategoryCommandsMenu(selectedCategory, client, interaction.member);
+                await interaction.editReply({ embeds, components });
             }
         } catch (error) {
             if (error?.code === 40060 || error?.code === 10062) {
-                logger.warn('Help category select interaction already acknowledged or expired.', {
-                    event: 'interaction.help.select.unavailable',
-                    errorCode: String(error.code),
-                    customId: interaction.customId,
-                    interactionId: interaction.id,
-                });
                 return;
             }
 
@@ -407,7 +374,3 @@ export const helpCategorySelectMenu = {
         }
     },
 };
-
-
-
-
