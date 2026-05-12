@@ -256,10 +256,10 @@ export function attachDashboard(app, client) {
             }
 
             const generateOptions = (selectedId) => {
-                let options = \`<option value="" class="bg-slate-900 text-gray-400">-- Select a Channel --</option>\`;
+                let options = `<option value="" class="bg-slate-900 text-gray-400">-- Select a Channel --</option>`;
                 textChannels.forEach(c => {
                     const selected = c.id === selectedId ? 'selected' : '';
-                    options += \`<option value="\${c.id}" class="bg-slate-900 text-white" \${selected}># \${c.name}</option>\`;
+                    options += `<option value="${c.id}" class="bg-slate-900 text-white" ${selected}># ${c.name}</option>`;
                 });
                 return options;
             };
