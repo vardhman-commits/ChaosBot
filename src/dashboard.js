@@ -17,6 +17,7 @@ export function attachDashboard(app, client) {
     const renderPage = (client, guild, config) => {
         const textChannels = guild.channels.cache.filter(c => c.type === 0).sort((a,b) => a.position - b.position).map(c => ({ id: c.id, label: `# ${c.name}` }));
         const voiceChannels = guild.channels.cache.filter(c => c.type === 2).sort((a,b) => a.position - b.position).map(c => ({ id: c.id, label: `🔊 ${c.name}` }));
+        const categories = guild.channels.cache.filter(c => c.type === 4).sort((a,b) => a.position - b.position).map(c => ({ id: c.id, label: `📁 ${c.name}` }));
         const roles = guild.roles.cache.sort((a,b) => b.position - a.position).map(r => ({ id: r.id, label: `@ ${r.name}` }));
 
         const buildSelect = (name, optionsList, selectedId, placeholder) => {
@@ -58,10 +59,11 @@ export function attachDashboard(app, client) {
                 .selector-chip { width: 50px; height: 50px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 900; border: 3px dashed rgba(255,255,255,0.4); cursor: pointer; transition: all 0.2s; box-shadow: 0 4px 10px rgba(0,0,0,0.4); }
                 .selector-chip.active { transform: scale(1.15) translateY(-5px); border-color: white; box-shadow: 0 10px 20px rgba(0,0,0,0.6); z-index: 10; }
                 
-                .wheel-box { width: 140px; height: 140px; border-radius: 50%; border: 12px solid #1a1a1a; background: #0a0a0a; display: flex; align-items: center; justify-content: center; box-shadow: 0 0 30px rgba(0,0,0,0.8), inset 0 0 20px rgba(0,0,0,0.9); position: relative; overflow: hidden; }
-                .wheel-number { font-size: 3.5rem; font-weight: 900; text-shadow: 0 2px 10px rgba(0,0,0,0.5); }
-                .spinning { animation: shake 0.1s infinite; }
-                @keyframes shake { 0% { transform: translate(1px, 1px) rotate(0deg); } 25% { transform: translate(-1px, -2px) rotate(-1deg); } 50% { transform: translate(-3px, 0px) rotate(1deg); } 75% { transform: translate(3px, 2px) rotate(0deg); } 100% { transform: translate(1px, -1px) rotate(-1deg); } }
+                /* Wheel Spin Animation CSS */
+                .wheel-box { width: 140px; height: 140px; border-radius: 50%; border: 6px solid #1a1a1a; background: radial-gradient(circle, #111 0%, #000 100%); display: flex; align-items: center; justify-content: center; box-shadow: 0 0 30px rgba(0,0,0,0.8), inset 0 0 20px rgba(0,0,0,0.9); position: relative; overflow: hidden; transition: all 0.3s ease; }
+                .wheel-number { font-size: 4rem; font-weight: 900; text-shadow: 0 4px 15px rgba(0,0,0,0.8); z-index: 10; font-variant-numeric: tabular-nums; transition: transform 0.05s ease; }
+                .spinning-glow { box-shadow: 0 0 50px #f1c40f, inset 0 0 30px #e74c3c; border-color: #f1c40f; animation: spinGlow 0.5s linear infinite; }
+                @keyframes spinGlow { 0% { filter: hue-rotate(0deg); transform: scale(1.05); } 100% { filter: hue-rotate(360deg); transform: scale(1.05); } }
             </style>
         </head>
         <body class="flex h-screen overflow-hidden">
@@ -112,13 +114,13 @@ export function attachDashboard(app, client) {
 
                     <div id="tab-casino" class="tab-content">
                         <div class="glass-card rounded-3xl p-8 border-t-4 border-t-green-500 relative">
-                            <div class="flex justify-between items-center mb-8 border-b border-white/5 pb-6">
+                            <div class="flex justify-between items-center mb-6 border-b border-white/5 pb-6">
                                 <div class="flex items-center gap-6">
-                                    <div class="wheel-box shadow-[0_0_25px_rgba(39,174,96,0.4)]"><div id="wheelNumber" class="wheel-number text-green-500">0</div></div>
+                                    <div class="wheel-box" id="wheelBox"><div id="wheelNumber" class="wheel-number text-green-500">0</div></div>
                                     <div>
                                         <h2 class="text-3xl font-black text-white mb-2 tracking-tight">Live Discord Roulette</h2>
                                         <p class="text-gray-400 max-w-md">This table is synchronized with your server's 24/7 Live Dealer! Place bets using your <span class="bg-red-600 text-white text-xs px-2 py-1 rounded ml-1">DEMO BALANCE</span>.</p>
-                                        <p class="text-sm font-bold mt-2" id="casinoStatus"><span class="text-gray-500">Connecting to Discord...</span></p>
+                                        <p class="text-sm font-bold mt-2" id="casinoStatus"><span class="text-gray-500"><i class="fa-solid fa-spinner fa-spin"></i> Connecting to Discord...</span></p>
                                     </div>
                                 </div>
                                 <div class="bg-[#09090b] px-6 py-4 rounded-2xl border border-green-500/30 flex flex-col items-end gap-2 shadow-xl">
@@ -129,7 +131,26 @@ export function attachDashboard(app, client) {
                                     <button onclick="resetDemoBalance()" class="text-xs text-gray-400 hover:text-white transition-all"><i class="fa-solid fa-rotate-right"></i> Reset to $100k</button>
                                 </div>
                             </div>
-                            <div id="rouletteStats" class="flex gap-4 mb-6 text-sm font-bold text-gray-400"></div>
+
+                            <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+                                <div class="bg-[#09090b] p-4 rounded-xl border border-white/5 shadow-inner">
+                                    <p class="text-[10px] text-gray-500 uppercase tracking-widest font-bold mb-2">Last 100 Spins Analytics</p>
+                                    <p class="text-sm font-bold text-white tracking-wide" id="statBreakdown"><span class="text-red-500">🔴 0%</span> <span class="text-gray-400">⚫ 0%</span> <span class="text-green-500">🟢 0%</span></p>
+                                </div>
+                                <div class="bg-[#09090b] p-4 rounded-xl border border-white/5 shadow-inner">
+                                    <p class="text-[10px] text-gray-500 uppercase tracking-widest font-bold mb-2">🔥 Hot Numbers</p>
+                                    <p class="text-base font-black text-red-400" id="statHot">N/A</p>
+                                </div>
+                                <div class="bg-[#09090b] p-4 rounded-xl border border-white/5 shadow-inner">
+                                    <p class="text-[10px] text-gray-500 uppercase tracking-widest font-bold mb-2">🧊 Cold Numbers</p>
+                                    <p class="text-base font-black text-blue-400" id="statCold">N/A</p>
+                                </div>
+                                <div class="bg-[#09090b] p-4 rounded-xl border border-white/5 shadow-inner overflow-hidden">
+                                    <p class="text-[10px] text-gray-500 uppercase tracking-widest font-bold mb-2">📜 Spin History</p>
+                                    <p class="text-lg font-black tracking-widest whitespace-nowrap" id="statHistory">N/A</p>
+                                </div>
+                            </div>
+
                             <div class="flex items-center gap-4 mb-6">
                                 <p class="text-sm font-bold text-gray-400 uppercase tracking-widest mr-4">Select Chip:</p>
                                 <div class="selector-chip val-10 text-white" onclick="selectChip(10, this)">10</div>
@@ -141,7 +162,7 @@ export function attachDashboard(app, client) {
                                 <button onclick="clearBets()" class="bg-red-500/20 text-red-400 border border-red-500/30 px-4 py-2 rounded-xl font-bold hover:bg-red-500/30 transition-all">Clear Bets</button>
                             </div>
                             <div class="roulette-board relative" id="rBoard">
-                                <div id="boardOverlay" class="absolute inset-0 bg-black/70 z-20 hidden flex flex-col items-center justify-center rounded-xl backdrop-blur-md">
+                                <div id="boardOverlay" class="absolute inset-0 bg-black/80 z-20 hidden flex flex-col items-center justify-center rounded-xl backdrop-blur-md">
                                     <p class="text-3xl font-black text-white tracking-widest mb-2" id="boardOverlayText">DEALER OFFLINE</p>
                                     <p class="text-sm text-gray-400">Start the 24/7 Dealer in the Economy Banker tab to play.</p>
                                 </div>
@@ -279,49 +300,10 @@ export function attachDashboard(app, client) {
                         <div class="glass-card rounded-3xl p-8 border-t-4 border-t-teal-500">
                             <h2 class="text-2xl font-black text-white mb-6"><i class="fa-solid fa-book-open text-teal-500 mr-2"></i> Operations Guide & Commands</h2>
                             <div class="space-y-6">
-                                <div class="bg-black/40 p-6 rounded-2xl border border-white/5">
-                                    <h3 class="text-xl font-bold text-rose-400 mb-2">🛡️ Moderation System</h3>
-                                    <ul class="text-sm text-gray-300 space-y-2 list-disc list-inside">
-                                        <li><b>/ban, /kick, /timeout, /warn</b>: Standard punishment commands for rule-breakers.</li>
-                                        <li><b>/massban, /masskick</b>: Handle large raids efficiently.</li>
-                                        <li><b>/mute apply/remove/setrole</b>: Manage mutes using the designated Mute role in Server Settings.</li>
-                                        <li><b>/purge [amount]</b>: Clear large amounts of messages in a channel.</li>
-                                        <li><b>/cases, /warnings</b>: Review a user's infraction history.</li>
-                                        <li><b>/lock, /unlock</b>: Prevent users from speaking during emergencies.</li>
-                                        <li><b>/usernotes add/remove/view</b>: Add private staff notes to user profiles.</li>
-                                    </ul>
-                                </div>
-                                <div class="bg-black/40 p-6 rounded-2xl border border-white/5">
-                                    <h3 class="text-xl font-bold text-yellow-400 mb-2">💰 Virtual Economy & Bank</h3>
-                                    <ul class="text-sm text-gray-300 space-y-2 list-disc list-inside">
-                                        <li><b>/work, /daily, /crime, /scavenge, /fish, /mine</b>: Main earning commands.</li>
-                                        <li><b>/bank deposit/withdraw/transfer/view</b>: Secure money from robbers.</li>
-                                        <li><b>/shop browse/buy</b>: Purchase items and roles from the store.</li>
-                                        <li><b>/roulette, /blackjack, /slots, /scratchcard, /teenpatti, /highcard</b>: Active casino games.</li>
-                                        <li><b>/eleaderboard</b>: View the richest players on the server.</li>
-                                        <li><b>/reseteco, /banker</b>: Admin-only commands to override or wipe user balances (Available in Dashboard).</li>
-                                    </ul>
-                                </div>
-                                <div class="bg-black/40 p-6 rounded-2xl border border-white/5">
-                                    <h3 class="text-xl font-bold text-fuchsia-400 mb-2">🎫 Utilities & Support</h3>
-                                    <ul class="text-sm text-gray-300 space-y-2 list-disc list-inside">
-                                        <li><b>/ticket setup</b>: Run this inside a channel to spawn an interactive Ticket Panel.</li>
-                                        <li><b>/claim, /close, /priority</b>: Staff commands to manage open tickets.</li>
-                                        <li><b>/app-admin</b>: Create and review staff applications.</li>
-                                        <li><b>/jointocreate setup</b>: Set up a master voice channel. When users join, they get their own temporary VC.</li>
-                                        <li><b>/verification setup</b>: Create a manual or auto-verification gate for new members.</li>
-                                    </ul>
-                                </div>
-                                <div class="bg-black/40 p-6 rounded-2xl border border-white/5">
-                                    <h3 class="text-xl font-bold text-emerald-400 mb-2">🎁 Community Engagement</h3>
-                                    <ul class="text-sm text-gray-300 space-y-2 list-disc list-inside">
-                                        <li><b>/gcreate, /gend, /greroll, /gdelete</b>: Full giveaway management for your server.</li>
-                                        <li><b>/level setup, /levelrole, /rank, /leaderboard</b>: Setup XP tracking and auto-role rewards.</li>
-                                        <li><b>/birthday set/list/next</b>: Allow users to set their birthdays for auto-announcements.</li>
-                                        <li><b>/reactroles setup</b>: Build interactive panels where users click emojis to get roles.</li>
-                                        <li><b>/welcome setup, /goodbye setup</b>: Configure professional join/leave messages.</li>
-                                    </ul>
-                                </div>
+                                <div class="bg-black/40 p-6 rounded-2xl border border-white/5"><h3 class="text-xl font-bold text-rose-400 mb-2">🛡️ Moderation System</h3><ul class="text-sm text-gray-300 space-y-2 list-disc list-inside"><li><b>/ban, /kick, /timeout, /warn</b>: Standard punishment commands for rule-breakers.</li><li><b>/massban, /masskick</b>: Handle large raids efficiently.</li><li><b>/mute apply/remove/setrole</b>: Manage mutes using the designated Mute role in Server Settings.</li><li><b>/purge [amount]</b>: Clear large amounts of messages in a channel.</li><li><b>/cases, /warnings</b>: Review a user's infraction history.</li><li><b>/lock, /unlock</b>: Prevent users from speaking during emergencies.</li><li><b>/usernotes add/remove/view</b>: Add private staff notes to user profiles.</li></ul></div>
+                                <div class="bg-black/40 p-6 rounded-2xl border border-white/5"><h3 class="text-xl font-bold text-yellow-400 mb-2">💰 Virtual Economy & Bank</h3><ul class="text-sm text-gray-300 space-y-2 list-disc list-inside"><li><b>/work, /daily, /crime, /scavenge, /fish, /mine</b>: Main earning commands.</li><li><b>/bank deposit/withdraw/transfer/view</b>: Secure money from robbers.</li><li><b>/shop browse/buy</b>: Purchase items and roles from the store.</li><li><b>/roulette, /blackjack, /slots, /scratchcard, /teenpatti, /highcard</b>: Active casino games.</li><li><b>/eleaderboard</b>: View the richest players on the server.</li><li><b>/reseteco, /banker</b>: Admin-only commands to override or wipe user balances (Available in Dashboard).</li></ul></div>
+                                <div class="bg-black/40 p-6 rounded-2xl border border-white/5"><h3 class="text-xl font-bold text-fuchsia-400 mb-2">🎫 Utilities & Support</h3><ul class="text-sm text-gray-300 space-y-2 list-disc list-inside"><li><b>/ticket setup</b>: Run this inside a channel to spawn an interactive Ticket Panel.</li><li><b>/claim, /close, /priority</b>: Staff commands to manage open tickets.</li><li><b>/app-admin</b>: Create and review staff applications.</li><li><b>/jointocreate setup</b>: Set up a master voice channel. When users join, they get their own temporary VC.</li><li><b>/verification setup</b>: Create a manual or auto-verification gate for new members.</li></ul></div>
+                                <div class="bg-black/40 p-6 rounded-2xl border border-white/5"><h3 class="text-xl font-bold text-emerald-400 mb-2">🎁 Community Engagement</h3><ul class="text-sm text-gray-300 space-y-2 list-disc list-inside"><li><b>/gcreate, /gend, /greroll, /gdelete</b>: Full giveaway management for your server.</li><li><b>/level setup, /levelrole, /rank, /leaderboard</b>: Setup XP tracking and auto-role rewards.</li><li><b>/birthday set/list/next</b>: Allow users to set their birthdays for auto-announcements.</li><li><b>/reactroles setup</b>: Build interactive panels where users click emojis to get roles.</li><li><b>/welcome setup, /goodbye setup</b>: Configure professional join/leave messages.</li></ul></div>
                             </div>
                         </div>
                     </div>
@@ -360,7 +342,6 @@ export function attachDashboard(app, client) {
                     document.getElementById('page-title').innerText = titles[tabId].t;
                     document.getElementById('page-desc').innerText = titles[tabId].d;
 
-                    // Start/Stop Casino Sync based on active tab
                     if(tabId === 'casino') startCasinoSync();
                     else if(casinoSyncLoop) { clearInterval(casinoSyncLoop); casinoSyncLoop = null; }
                 }
@@ -403,25 +384,62 @@ export function attachDashboard(app, client) {
                             const res = await fetch(\`/admin/api/casino/live?guildId=\${currentGuildId}\`); const data = await res.json();
                             if (!data.active) { document.getElementById('boardOverlay').classList.remove('hidden'); document.getElementById('boardOverlayText').innerText = 'DEALER OFFLINE'; return; }
                             
-                            const lastSpins = data.history.map(n => \`<span class="\${n === 0 ? 'text-green-400' : (redNumbers.includes(n) ? 'text-red-400' : 'text-gray-400')}">\${n}</span>\`).join(' - ');
-                            document.getElementById('rouletteStats').innerHTML = \`<span>Recent Discord Spins: \${lastSpins || 'None'}</span>\`;
+                            // CALCULATE & RENDER LIVE STATS
+                            const history = data.history;
+                            if (history && history.length > 0) {
+                                let r=0, b=0, g=0; let freq = {};
+                                history.forEach(n => { if(n===0) g++; else if(redNumbers.includes(n)) r++; else b++; freq[n] = (freq[n] || 0) + 1; });
+                                const t = history.length;
+                                document.getElementById('statBreakdown').innerHTML = \`<span class="text-red-500">🔴 \${r} (\${((r/t)*100).toFixed(1)}%)</span> &nbsp; <span class="text-gray-400">⚫ \${b} (\${((b/t)*100).toFixed(1)}%)</span> &nbsp; <span class="text-green-500">🟢 \${g} (\${((g/t)*100).toFixed(1)}%)</span>\`;
+                                
+                                const sorted = Object.entries(freq).sort((x,y)=>y[1]-x[1]);
+                                document.getElementById('statHot').innerText = sorted.slice(0,5).map(x=>x[0]).join(', ') || 'N/A';
+                                const allNums = Array.from({length:37}, (_,i)=>i);
+                                document.getElementById('statCold').innerText = allNums.map(n=>[n, freq[n]||0]).sort((x,y)=>x[1]-y[1]).slice(0,5).map(x=>x[0]).join(', ');
+                                
+                                document.getElementById('statHistory').innerHTML = history.slice(-10).map(n => \`<span class="\${n === 0 ? 'text-green-400' : (redNumbers.includes(n) ? 'text-red-500' : 'text-gray-500')}">\${n}</span>\`).join(' &nbsp; ');
+                            } else {
+                                document.getElementById('statBreakdown').innerHTML = '<span class="text-gray-500">Waiting for first spin...</span>';
+                            }
 
                             if (data.status === 'betting') {
-                                if (currentCasinoPhase !== 'betting') { currentCasinoPhase = 'betting'; document.getElementById('wheelNumber').classList.remove('spinning'); document.getElementById('boardOverlay').classList.add('hidden'); }
-                                document.getElementById('casinoStatus').innerHTML = \`<span class="text-green-500">Live Bets Open (\${data.timeRemaining}s)</span>\`;
+                                if (currentCasinoPhase !== 'betting') { currentCasinoPhase = 'betting'; document.getElementById('wheelNumber').style.transform = 'scale(1)'; document.getElementById('boardOverlay').classList.add('hidden'); }
+                                document.getElementById('casinoStatus').innerHTML = \`<span class="text-green-500 font-black"><i class="fa-regular fa-clock"></i> LIVE BETS OPEN (\${data.timeRemaining}s)</span>\`;
                             } 
                             else if (data.status === 'spinning' && currentCasinoPhase !== 'spinning') {
-                                currentCasinoPhase = 'spinning'; document.getElementById('casinoStatus').innerHTML = '<span class="text-yellow-500">Wheel is Spinning!</span>'; document.getElementById('boardOverlay').classList.remove('hidden'); document.getElementById('boardOverlayText').innerText = 'NO MORE BETS'; triggerDashboardSpin(data.winningNumber);
+                                currentCasinoPhase = 'spinning'; document.getElementById('casinoStatus').innerHTML = '<span class="text-yellow-500 font-black">WHEEL IS SPINNING!</span>'; document.getElementById('boardOverlay').classList.remove('hidden'); document.getElementById('boardOverlayText').innerText = 'NO MORE BETS'; triggerDashboardSpin(data.winningNumber);
                             }
                         } catch(e) {}
                     }, 1000);
                 }
 
+                // THE NEW WHEEL SPIN ANIMATION
                 async function triggerDashboardSpin(winningNumber) {
-                    const wheel = document.getElementById('wheelNumber'); wheel.classList.add('spinning');
-                    let spinInterval = setInterval(() => { let rand = Math.floor(Math.random() * 37); wheel.innerText = rand; wheel.style.color = rand === 0 ? '#27ae60' : (redNumbers.includes(rand) ? '#e74c3c' : '#7f8c8d'); }, 50);
-                    await new Promise(r => setTimeout(r, 7000));
-                    clearInterval(spinInterval); wheel.classList.remove('spinning'); wheel.innerText = winningNumber;
+                    const wheel = document.getElementById('wheelNumber'); 
+                    const wheelBox = document.getElementById('wheelBox');
+                    wheelBox.classList.add('spinning-glow');
+                    
+                    let startTime = Date.now();
+                    let delay = 20;
+                    
+                    // Spin for exactly 7.5 seconds to perfectly match the Discord backend wait time
+                    while(Date.now() - startTime < 7500) {
+                        let rand = Math.floor(Math.random() * 37);
+                        wheel.innerText = rand;
+                        wheel.style.color = rand === 0 ? '#27ae60' : (redNumbers.includes(rand) ? '#e74c3c' : '#7f8c8d');
+                        wheel.style.transform = \`scale(\${1 + Math.random()*0.1})\`;
+                        
+                        let elapsed = Date.now() - startTime;
+                        if(elapsed > 5000) delay = 100;
+                        if(elapsed > 6500) delay = 300;
+                        if(elapsed > 7000) delay = 500;
+                        
+                        await new Promise(r => setTimeout(r, delay));
+                    }
+                    
+                    wheelBox.classList.remove('spinning-glow'); 
+                    wheel.innerText = winningNumber;
+                    wheel.style.transform = 'scale(1.2)';
                     wheel.style.color = winningNumber === 0 ? '#27ae60' : (redNumbers.includes(winningNumber) ? '#e74c3c' : '#7f8c8d');
                     
                     let totalWon = 0;
@@ -463,7 +481,6 @@ export function attachDashboard(app, client) {
         `;
     };
 
-    // 🏠 MAIN DASHBOARD ROUTE
     dashboard.get('/', async (req, res) => {
         const guild = client.guilds.cache.first();
         if (!guild) return res.send("<h1 style='color:white'>Bot is not in any servers! Invite it first.</h1>");
@@ -471,15 +488,13 @@ export function attachDashboard(app, client) {
         res.send(renderPage(client, guild, config));
     });
 
-    // Casino Sync Route
     dashboard.get('/api/casino/live', async (req, res) => {
         const guildId = req.query.guildId;
         const state = liveRouletteState.get(guildId);
         if (!state) return res.json({ active: false });
-        res.json({ active: true, status: state.status, timeRemaining: state.timeRemaining, winningNumber: state.winningNumber, history: state.history.slice(-10) });
+        res.json({ active: true, status: state.status, timeRemaining: state.timeRemaining, winningNumber: state.winningNumber, history: state.history.slice(-100) });
     });
 
-    // ⚡ API: Universal Config Saver 
     dashboard.post('/api/config/update', async (req, res) => {
         try {
             const { guildId, _action, ...settings } = req.body;
@@ -496,7 +511,6 @@ export function attachDashboard(app, client) {
         } catch (error) { res.sendStatus(500); }
     });
 
-    // ⚡ API: Economy Banker Override
     dashboard.post('/api/economy/edit', async (req, res) => {
         const { userId, guildId, action, amount } = req.body;
         try {
@@ -509,7 +523,6 @@ export function attachDashboard(app, client) {
         } catch (error) { res.sendStatus(500); }
     });
 
-    // ⚡ API: Danger Zone - Wipe Economy Data
     dashboard.post('/api/economy/wipe', async (req, res) => {
         try {
             await setEconomyData(client, req.body.guildId, req.body.userId, { wallet: 0, bank: 0, bankLevel: 0, xp: 0, level: 1, inventory: {} });
@@ -517,7 +530,6 @@ export function attachDashboard(app, client) {
         } catch (error) { res.sendStatus(500); }
     });
 
-    // ⚡ API: Moderation Actions
     dashboard.post('/api/moderation/execute', async (req, res) => {
         const { guildId, userId, action, reason, duration } = req.body;
         try {
@@ -531,7 +543,6 @@ export function attachDashboard(app, client) {
         } catch (error) { res.status(400).json({ message: "Failed." }); }
     });
 
-    // ⚡ API: Data Fetchers
     dashboard.get('/api/data/birthdays', async (req, res) => { try { res.json((await db.query('SELECT user_id, birth_month, birth_day FROM birthdays WHERE guild_id = $1 LIMIT 50', [req.query.guildId])).rows); } catch (e) { res.json([]); } });
     dashboard.get('/api/data/giveaways', async (req, res) => { try { res.json((await db.query('SELECT message_id, prize FROM giveaways WHERE guild_id = $1 AND ended = false', [req.query.guildId])).rows); } catch (e) { res.json([]); } });
     dashboard.post('/api/data/giveaways/end', async (req, res) => { try { await db.query('UPDATE giveaways SET end_time = $1 WHERE message_id = $2', [Date.now(), req.body.messageId]); res.sendStatus(200); } catch (e) { res.sendStatus(500); } });
