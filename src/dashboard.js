@@ -146,7 +146,7 @@ export function attachDashboard(app, client) {
                         </div>
                     </div>
                     
-                    <form action="server" method="GET" class="relative z-10">
+                    <form action="/admin/server" method="GET" class="relative z-10">
                         <div class="bg-black/50 border border-white/10 rounded-2xl p-6 mb-6">
                             <label class="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">Target Discord Server ID</label>
                             <div class="relative">
@@ -170,7 +170,7 @@ export function attachDashboard(app, client) {
                         </div>
                     </div>
                     
-                    <form action="user" method="GET" class="relative z-10">
+                    <form action="/admin/user" method="GET" class="relative z-10">
                         <div class="bg-black/50 border border-white/10 rounded-2xl p-6 mb-6 grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div>
                                 <label class="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">User ID</label>
@@ -245,7 +245,6 @@ export function attachDashboard(app, client) {
 
             const config = await getGuildConfig(client, guildId);
             
-            // Get text channels for dropdowns (Type 0 is Text Channel)
             const textChannels = guild.channels.cache
                 .filter(c => c.type === 0) 
                 .map(c => ({ id: c.id, name: c.name }));
@@ -285,7 +284,7 @@ export function attachDashboard(app, client) {
                         </div>
                     </div>
 
-                    <form action="edit-server" method="POST" class="relative z-10 space-y-8">
+                    <form action="/admin/edit-server" method="POST" class="relative z-10 space-y-8">
                         <input type="hidden" name="guildId" value="${guildId}">
 
                         <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
@@ -348,7 +347,7 @@ export function attachDashboard(app, client) {
                 logChannel: logChannel || null
             });
             const msg = encodeURIComponent(`Server configurations updated successfully!`);
-            res.redirect(`server?guildId=${guildId}&success=true&msg=${msg}`);
+            res.redirect(`/admin/server?guildId=${guildId}&success=true&msg=${msg}`); // ABSOLUTE ROUTING FIX
         } catch (error) {
             res.send("Error updating server configuration.");
         }
@@ -402,7 +401,7 @@ export function attachDashboard(app, client) {
                         <h2 class="text-2xl font-black text-white mb-2 flex items-center gap-3 relative z-10"><i class="fa-solid fa-building-columns text-yellow-500"></i> Central Vault Override</h2>
                         <p class="text-gray-400 text-sm mb-10 relative z-10">Directly modify this user's economy database. Changes are applied instantly.</p>
 
-                        <form action="edit-balance" method="POST" class="space-y-8 relative z-10">
+                        <form action="/admin/edit-balance" method="POST" class="space-y-8 relative z-10">
                             <input type="hidden" name="userId" value="${userId}">
                             <input type="hidden" name="guildId" value="${guildId}">
 
@@ -467,7 +466,7 @@ export function attachDashboard(app, client) {
 
             await setEconomyData(client, guildId, userId, userData);
             const msg = encodeURIComponent(`Successfully ${action}ed $${numAmount.toLocaleString()} ${action === 'add' ? 'to' : action === 'remove' ? 'from' : 'in'} their ${account}!`);
-            res.redirect(`user?userId=${userId}&guildId=${guildId}&success=true&msg=${msg}`);
+            res.redirect(`/admin/user?userId=${userId}&guildId=${guildId}&success=true&msg=${msg}`); // ABSOLUTE ROUTING FIX
         } catch (error) {
             res.send("Error updating database.");
         }
