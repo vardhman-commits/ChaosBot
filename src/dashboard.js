@@ -4,9 +4,7 @@ import { getEconomyData, setEconomyData } from './utils/economy.js';
 import { getGuildConfig, updateGuildConfig } from './services/guildConfig.js';
 import { logger } from './utils/logger.js';
 import { db } from './utils/database.js';
-import { addWarning } from './services/warningService.js'; // Added to make Warnings work
-
-// Global map from roulette to manage dealers
+import { WarningService } from './services/warningService.js';
 import { startPersistentRoulettes } from './commands/Economy/roulette.js';
 
 export function attachDashboard(app, client) {
@@ -555,7 +553,7 @@ export function attachDashboard(app, client) {
         res.send(renderPage(client, guild, config));
     });
 
-    // ⚡ API: Universal Config Saver 
+    // ⚡ API: Universal Config Saver (Handles Nested Data Automatically)
     dashboard.post('/api/config/update', async (req, res) => {
         try {
             const { guildId, _action, ...settings } = req.body;
@@ -573,7 +571,6 @@ export function attachDashboard(app, client) {
             }
             await updateGuildConfig(client, guildId, updates);
 
-            // If action is start_roulette, restart the loop cleanly!
             if (_action === 'start_roulette') {
                 await startPersistentRoulettes(client);
             }
@@ -615,9 +612,14 @@ export function attachDashboard(app, client) {
             
             if (action === 'kick') { await member.kick(reason); }
             else if (action === 'ban') { await member.ban({ reason }); }
-            else if (action === 'timeout') { await member.timeout(60 * 60 * 1000, reason); } // Default 1 hour 
+            else if (action === 'timeout') { await member.timeout(60 * 60 * 1000, reason); } 
             else if (action === 'warn') {
-                await addWarning(guildId, userId, "Dashboard", reason);
+                await WarningService.addWarning({
+                    guildId: guildId,
+                    userId: userId,
+                    moderatorId: client.user.id,
+                    reason: reason || "No reason provided via dashboard."
+                });
             }
             else if (action === 'mute') {
                 const guildConfig = await getGuildConfig(client, guildId);
@@ -627,7 +629,7 @@ export function attachDashboard(app, client) {
             
             res.status(200).json({ message: `Successfully executed ${action} on ${member.user.tag}` });
         } catch (error) {
-            res.status(400).json({ message: "Action failed. Check hierarchy permissions or user ID." });
+            res.status(400).json({ message: "Action failed. Check hierarchy permissions or if the user is in the server." });
         }
     });
 
@@ -654,7 +656,7 @@ export function attachDashboard(app, client) {
         } catch (e) { res.sendStatus(500); }
     });
 
-    // ⚡ API: Fetch JTC Channels
+    // ⚡ API: Fetch JTC Channels from Memory & Guild Cache
     dashboard.get('/api/data/jtc', async (req, res) => {
         try {
             const guildId = req.query.guildId;
