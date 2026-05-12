@@ -17,7 +17,6 @@ export function attachDashboard(app, client) {
     const renderPage = (client, guild, config) => {
         const textChannels = guild.channels.cache.filter(c => c.type === 0).sort((a,b) => a.position - b.position).map(c => ({ id: c.id, label: `# ${c.name}` }));
         const voiceChannels = guild.channels.cache.filter(c => c.type === 2).sort((a,b) => a.position - b.position).map(c => ({ id: c.id, label: `🔊 ${c.name}` }));
-        const categories = guild.channels.cache.filter(c => c.type === 4).sort((a,b) => a.position - b.position).map(c => ({ id: c.id, label: `📁 ${c.name}` }));
         const roles = guild.roles.cache.sort((a,b) => b.position - a.position).map(r => ({ id: r.id, label: `@ ${r.name}` }));
 
         const buildSelect = (name, optionsList, selectedId, placeholder) => {
@@ -162,7 +161,7 @@ export function attachDashboard(app, client) {
                                         <div><label class="text-xs font-bold text-gray-500 uppercase">Admin Role</label> ${buildSelect('adminRole', roles, config.adminRole, 'Admin Role')}</div>
                                         <div><label class="text-xs font-bold text-gray-500 uppercase">Mod Role</label> ${buildSelect('modRole', roles, config.modRole, 'Mod Role')}</div>
                                     </div>
-                                    <button type="submit" class="w-full bg-white/10 hover:bg-emerald-500/20 text-white font-bold py-3 rounded-xl mt-4 border border-white/10 transition-all">Save Security Config</button>
+                                    <button type="submit" class="w-full bg-white/10 hover:bg-emerald-500/20 text-white font-bold py-3 rounded-xl mt-4 border border-white/10 transition-all">Save Config</button>
                                 </form>
                             </div>
                             <div class="glass-card rounded-3xl p-8 border border-white/5 flex flex-col">
@@ -265,12 +264,12 @@ export function attachDashboard(app, client) {
                             <div class="space-y-6 flex flex-col">
                                 <div class="glass-card rounded-3xl p-6 border-t-2 border-t-indigo-500">
                                     <h3 class="text-xl font-bold text-white mb-2"><i class="fa-solid fa-microphone text-indigo-500 mr-2"></i> Join to Create</h3>
-                                    <form class="config-form space-y-4"><input type="hidden" name="guildId" value="${guild.id}"><div><label class="text-[10px] text-gray-500 uppercase">Master Voice Channel</label>${buildSelect('joinToCreateChannelId', voiceChannels, config.joinToCreateChannelId, 'Master Voice Channel')}</div><button type="submit" class="w-full bg-white/10 py-2 rounded-lg text-white text-sm font-bold">Save</button></form>
-                                    <button onclick="fetchJTCStatus()" class="w-full mt-4 border border-indigo-500/50 text-indigo-400 py-2 rounded-lg text-sm font-bold bg-indigo-500/10 hover:bg-indigo-500/20">View Active Sessions</button>
+                                    <form class="config-form space-y-4"><input type="hidden" name="guildId" value="${guild.id}"><div><label class="text-[10px] text-gray-500 uppercase">Master Voice Channel</label>${buildSelect('joinToCreateChannelId', voiceChannels, config.joinToCreateChannelId, 'Master Voice Channel')}</div><button type="submit" class="w-full bg-white/10 py-2 rounded-lg text-white text-sm font-bold border border-white/10">Save</button></form>
+                                    <button onclick="fetchJTCStatus()" class="w-full mt-4 border border-indigo-500/50 text-indigo-400 py-2 rounded-lg text-sm font-bold bg-indigo-500/10 hover:bg-indigo-500/20 transition-all">View Active Sessions</button>
                                 </div>
                                 <div class="glass-card rounded-3xl p-6 border border-white/5">
                                     <h3 class="text-lg font-bold text-white mb-3"><i class="fa-solid fa-clipboard-user text-violet-500 mr-2"></i> App Admin</h3>
-                                    <form class="config-form flex flex-col gap-3"><input type="hidden" name="guildId" value="${guild.id}">${buildSelect('appAdminChannelId', textChannels, config.appAdminChannelId, 'App Review Channel')}<button type="submit" class="bg-white/10 py-2 rounded-lg text-white text-sm font-bold">Save</button></form>
+                                    <form class="config-form flex flex-col gap-3"><input type="hidden" name="guildId" value="${guild.id}">${buildSelect('appAdminChannelId', textChannels, config.appAdminChannelId, 'App Review Channel')}<button type="submit" class="bg-white/10 py-2 rounded-lg text-white text-sm font-bold border border-white/10">Save</button></form>
                                 </div>
                             </div>
                         </div>
@@ -278,12 +277,51 @@ export function attachDashboard(app, client) {
 
                     <div id="tab-guide" class="tab-content">
                         <div class="glass-card rounded-3xl p-8 border-t-4 border-t-teal-500">
-                            <h2 class="text-2xl font-black text-white mb-6"><i class="fa-solid fa-book-open text-teal-500 mr-2"></i> Bot Command Guide</h2>
-                            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                <div class="bg-black/40 p-6 rounded-2xl border border-white/5"><h3 class="text-xl font-bold text-yellow-400 mb-2">💰 Economy</h3><ul class="text-sm text-gray-300 list-disc list-inside"><li><b>/work, /daily, /crime</b>: Earning.</li><li><b>/bank deposit/withdraw</b>: Bank.</li><li><b>/roulette, /blackjack</b>: Casino.</li></ul></div>
-                                <div class="bg-black/40 p-6 rounded-2xl border border-white/5"><h3 class="text-xl font-bold text-rose-400 mb-2">🛡️ Moderation</h3><ul class="text-sm text-gray-300 list-disc list-inside"><li><b>/ban, /kick, /timeout, /warn</b>: Mod actions.</li><li><b>/mute apply/remove</b>: Mutes.</li></ul></div>
-                                <div class="bg-black/40 p-6 rounded-2xl border border-white/5"><h3 class="text-xl font-bold text-fuchsia-400 mb-2">🎫 Utilities</h3><ul class="text-sm text-gray-300 list-disc list-inside"><li><b>/ticket setup</b>: Ticket Panel.</li><li><b>/jointocreate setup</b>: JTC.</li></ul></div>
-                                <div class="bg-black/40 p-6 rounded-2xl border border-white/5"><h3 class="text-xl font-bold text-emerald-400 mb-2">🎁 Engagement</h3><ul class="text-sm text-gray-300 list-disc list-inside"><li><b>/gcreate, /gend</b>: Giveaways.</li><li><b>/levelrole</b>: Leveling rewards.</li></ul></div>
+                            <h2 class="text-2xl font-black text-white mb-6"><i class="fa-solid fa-book-open text-teal-500 mr-2"></i> Operations Guide & Commands</h2>
+                            <div class="space-y-6">
+                                <div class="bg-black/40 p-6 rounded-2xl border border-white/5">
+                                    <h3 class="text-xl font-bold text-rose-400 mb-2">🛡️ Moderation System</h3>
+                                    <ul class="text-sm text-gray-300 space-y-2 list-disc list-inside">
+                                        <li><b>/ban, /kick, /timeout, /warn</b>: Standard punishment commands for rule-breakers.</li>
+                                        <li><b>/massban, /masskick</b>: Handle large raids efficiently.</li>
+                                        <li><b>/mute apply/remove/setrole</b>: Manage mutes using the designated Mute role in Server Settings.</li>
+                                        <li><b>/purge [amount]</b>: Clear large amounts of messages in a channel.</li>
+                                        <li><b>/cases, /warnings</b>: Review a user's infraction history.</li>
+                                        <li><b>/lock, /unlock</b>: Prevent users from speaking during emergencies.</li>
+                                        <li><b>/usernotes add/remove/view</b>: Add private staff notes to user profiles.</li>
+                                    </ul>
+                                </div>
+                                <div class="bg-black/40 p-6 rounded-2xl border border-white/5">
+                                    <h3 class="text-xl font-bold text-yellow-400 mb-2">💰 Virtual Economy & Bank</h3>
+                                    <ul class="text-sm text-gray-300 space-y-2 list-disc list-inside">
+                                        <li><b>/work, /daily, /crime, /scavenge, /fish, /mine</b>: Main earning commands.</li>
+                                        <li><b>/bank deposit/withdraw/transfer/view</b>: Secure money from robbers.</li>
+                                        <li><b>/shop browse/buy</b>: Purchase items and roles from the store.</li>
+                                        <li><b>/roulette, /blackjack, /slots, /scratchcard, /teenpatti, /highcard</b>: Active casino games.</li>
+                                        <li><b>/eleaderboard</b>: View the richest players on the server.</li>
+                                        <li><b>/reseteco, /banker</b>: Admin-only commands to override or wipe user balances (Available in Dashboard).</li>
+                                    </ul>
+                                </div>
+                                <div class="bg-black/40 p-6 rounded-2xl border border-white/5">
+                                    <h3 class="text-xl font-bold text-fuchsia-400 mb-2">🎫 Utilities & Support</h3>
+                                    <ul class="text-sm text-gray-300 space-y-2 list-disc list-inside">
+                                        <li><b>/ticket setup</b>: Run this inside a channel to spawn an interactive Ticket Panel.</li>
+                                        <li><b>/claim, /close, /priority</b>: Staff commands to manage open tickets.</li>
+                                        <li><b>/app-admin</b>: Create and review staff applications.</li>
+                                        <li><b>/jointocreate setup</b>: Set up a master voice channel. When users join, they get their own temporary VC.</li>
+                                        <li><b>/verification setup</b>: Create a manual or auto-verification gate for new members.</li>
+                                    </ul>
+                                </div>
+                                <div class="bg-black/40 p-6 rounded-2xl border border-white/5">
+                                    <h3 class="text-xl font-bold text-emerald-400 mb-2">🎁 Community Engagement</h3>
+                                    <ul class="text-sm text-gray-300 space-y-2 list-disc list-inside">
+                                        <li><b>/gcreate, /gend, /greroll, /gdelete</b>: Full giveaway management for your server.</li>
+                                        <li><b>/level setup, /levelrole, /rank, /leaderboard</b>: Setup XP tracking and auto-role rewards.</li>
+                                        <li><b>/birthday set/list/next</b>: Allow users to set their birthdays for auto-announcements.</li>
+                                        <li><b>/reactroles setup</b>: Build interactive panels where users click emojis to get roles.</li>
+                                        <li><b>/welcome setup, /goodbye setup</b>: Configure professional join/leave messages.</li>
+                                    </ul>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -296,6 +334,38 @@ export function attachDashboard(app, client) {
                 const redNumbers = [1,3,5,7,9,12,14,16,18,19,21,23,25,27,30,32,34,36];
                 let casinoSyncLoop = null; let currentCasinoPhase = 'loading'; let demoBalance = 100000; let selectedChip = 100; let activeBets = {}; 
 
+                // --- TAB NAVIGATION ---
+                function switchTab(tabId) {
+                    document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+                    document.getElementById('tab-' + tabId).classList.add('active');
+                    
+                    document.querySelectorAll('.nav-btn').forEach(btn => {
+                        btn.classList.remove('bg-fuchsia-500/10', 'text-fuchsia-400', 'border-fuchsia-500/20');
+                        btn.classList.add('text-gray-400', 'border-transparent');
+                    });
+                    const activeBtn = document.querySelector(\`.nav-btn[data-target="\${tabId}"]\`);
+                    activeBtn.classList.remove('text-gray-400', 'border-transparent');
+                    activeBtn.classList.add('bg-fuchsia-500/10', 'text-fuchsia-400', 'border-fuchsia-500/20');
+
+                    const titles = {
+                        'overview': { t: 'Command Center', d: 'System status and live analytics.' },
+                        'settings': { t: 'Server Settings', d: 'Configure base roles, verification, and logging.' },
+                        'moderation': { t: 'Security & Moderation', d: 'Manage punishments, timeouts, and security roles.' },
+                        'economy': { t: 'Economy Banker', d: 'Manage player balances, wipe accounts, and set casinos.' },
+                        'casino': { t: 'Demo Casino', d: 'Interactive frontend simulation of the bot\\\'s Roulette engine.' },
+                        'engagement': { t: 'Community Engagement', d: 'Manage Giveaways, Birthdays, and Leveling systems.' },
+                        'utilities': { t: 'System Utilities', d: 'Manage Tickets, Applications, and Voice.' },
+                        'guide': { t: 'Bot Documentation', d: 'Learn how to use all the bot modules and commands.' }
+                    };
+                    document.getElementById('page-title').innerText = titles[tabId].t;
+                    document.getElementById('page-desc').innerText = titles[tabId].d;
+
+                    // Start/Stop Casino Sync based on active tab
+                    if(tabId === 'casino') startCasinoSync();
+                    else if(casinoSyncLoop) { clearInterval(casinoSyncLoop); casinoSyncLoop = null; }
+                }
+
+                // --- CASINO LOGIC ---
                 if(localStorage.getItem('chaosDemoBalance')) demoBalance = parseInt(localStorage.getItem('chaosDemoBalance'));
                 function updateDemoUI() { document.getElementById('demoBalanceDisplay').innerText = '$' + demoBalance.toLocaleString(); localStorage.setItem('chaosDemoBalance', demoBalance); }
                 updateDemoUI();
@@ -378,18 +448,15 @@ export function attachDashboard(app, client) {
                     activeBets = {}; document.querySelectorAll('.r-chip').forEach(el => el.remove()); updateDemoUI();
                 }
 
-                function switchTabWrap(id) { switchTab(id); if(id === 'casino') startCasinoSync(); else if(casinoSyncLoop) { clearInterval(casinoSyncLoop); casinoSyncLoop = null; } }
-                document.querySelectorAll('.nav-btn').forEach(btn => btn.onclick = () => switchTabWrap(btn.getAttribute('data-target')));
-
-                // API Forms 
+                // ================= API CALLS & FORMS =================
                 document.querySelectorAll('.config-form').forEach(f => f.addEventListener('submit', async e => { e.preventDefault(); const d = Object.fromEntries(new FormData(f).entries()); await fetch('/admin/api/config/update', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(d)}); Swal.fire({title:'Saved', icon:'success', background:'#09090b', color:'#fff', timer:1500, showConfirmButton:false}); }));
                 document.getElementById('bankerForm').addEventListener('submit', async e => { e.preventDefault(); await fetch('/admin/api/economy/edit', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({userId:document.getElementById('bankUserId').value, guildId:currentGuildId, action:document.getElementById('bankAction').value, amount:document.getElementById('bankAmount').value})}); Swal.fire({title:'Success', icon:'success', background:'#09090b', color:'#fff'}); });
                 document.getElementById('wipeForm').addEventListener('submit', async e => { e.preventDefault(); const c = await Swal.fire({title:'Are you sure?', icon:'warning', showCancelButton:true, confirmButtonColor:'#dc2626', background:'#09090b', color:'#fff'}); if(c.isConfirmed) { await fetch('/admin/api/economy/wipe', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({userId:document.getElementById('wipeUserId').value, guildId:currentGuildId})}); Swal.fire({title:'Annihilated!', icon:'success', background:'#09090b', color:'#fff'}); document.getElementById('wipeUserId').value=''; } });
                 document.getElementById('modActionForm').addEventListener('submit', async e => { e.preventDefault(); const res = await fetch('/admin/api/moderation/execute', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({guildId:currentGuildId, userId:document.getElementById('modUserId').value, action:document.getElementById('modActionType').value, duration:document.getElementById('modDuration').value, reason:document.getElementById('modReason').value})}); const data = await res.json(); Swal.fire({title:res.ok?'Success':'Failed', text:data.message, icon:res.ok?'success':'error', background:'#09090b', color:'#fff'}); });
 
-                async function fetchBirthdays() { const r = await fetch(\`/admin/api/data/birthdays?guildId=\${currentGuildId}\`); const d = await r.json(); Swal.fire({title:'Birthdays', html: d.length ? '<ul class="text-left text-sm space-y-2">'+d.map(b=>\`<li class="bg-[#050505] p-2 border border-white/10">\${b.user_id}: \${b.birth_month}/\${b.birth_day}</li>\`).join('')+'</ul>' : 'None found', background:'#09090b', color:'#fff'}); }
-                async function fetchGiveaways() { const r = await fetch(\`/admin/api/data/giveaways?guildId=\${currentGuildId}\`); const d = await r.json(); Swal.fire({title:'Giveaways', html: d.length ? '<ul class="text-left text-sm space-y-2">'+d.map(g=>\`<li class="bg-[#050505] p-2 border border-white/10 flex justify-between"><span>\${g.prize}</span><button onclick="fetch('/admin/api/data/giveaways/end',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({messageId:'\${g.message_id}',guildId:'\${currentGuildId}'})})" class="text-red-500">End</button></li>\`).join('')+'</ul>' : 'None active', background:'#09090b', color:'#fff'}); }
-                async function fetchJTCStatus() { const r = await fetch(\`/admin/api/data/jtc?guildId=\${currentGuildId}\`); const d = await r.json(); Swal.fire({title:'JTC Sessions', html: d.length ? '<ul class="text-left text-sm space-y-2">'+d.map(c=>\`<li class="bg-[#050505] p-2 border border-white/10">\${c.name} (\${c.members} members)</li>\`).join('')+'</ul>' : 'No active sessions', background:'#09090b', color:'#fff'}); }
+                async function fetchBirthdays() { const r = await fetch(\`/admin/api/data/birthdays?guildId=\${currentGuildId}\`); const d = await r.json(); Swal.fire({title:'Birthdays', html: d.length ? '<ul class="text-left text-sm space-y-2 max-h-60 overflow-y-auto">'+d.map(b=>\`<li class="bg-[#050505] p-3 rounded border border-white/10">User ID: <span class="text-fuchsia-400">\${b.user_id}</span> | Date: \${b.birth_month}/\${b.birth_day}</li>\`).join('')+'</ul>' : 'None found', background:'#09090b', color:'#fff'}); }
+                async function fetchGiveaways() { const r = await fetch(\`/admin/api/data/giveaways?guildId=\${currentGuildId}\`); const d = await r.json(); Swal.fire({title:'Giveaways', html: d.length ? '<ul class="text-left text-sm space-y-2 max-h-60 overflow-y-auto">'+d.map(g=>\`<li class="bg-[#050505] p-3 rounded border border-white/10 flex justify-between items-center"><span>Prize: <span class="text-pink-400 font-bold">\${g.prize}</span></span><button onclick="fetch('/admin/api/data/giveaways/end',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({messageId:'\${g.message_id}',guildId:'\${currentGuildId}'})})" class="bg-red-600/20 text-red-500 border border-red-500/50 px-3 py-1 rounded hover:bg-red-600/40">End Now</button></li>\`).join('')+'</ul>' : 'None active', background:'#09090b', color:'#fff'}); }
+                async function fetchJTCStatus() { const r = await fetch(\`/admin/api/data/jtc?guildId=\${currentGuildId}\`); const d = await r.json(); Swal.fire({title:'JTC Sessions', html: d.length ? '<ul class="text-left text-sm space-y-2 max-h-60 overflow-y-auto">'+d.map(c=>\`<li class="bg-[#050505] p-3 rounded border border-white/10 flex justify-between items-center"><div><span class="text-indigo-400 font-bold">\${c.name}</span><br><span class="text-xs text-gray-500">ID: \${c.channelId}</span></div><span class="bg-white/10 px-3 py-1 rounded-lg text-xs">\${c.members} members</span></li>\`).join('')+'</ul>' : 'No active sessions', background:'#09090b', color:'#fff'}); }
             </script>
         </body>
         </html>
