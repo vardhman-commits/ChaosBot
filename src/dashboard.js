@@ -41,7 +41,7 @@ export function attachDashboard(app, client) {
             <style>
                 body { font-family: 'Outfit', sans-serif; background-color: #030303; color: #e2e8f0; }
                 .glass-card { background: linear-gradient(145deg, rgba(20,20,25,0.9) 0%, rgba(10,10,15,0.9) 100%); backdrop-filter: blur(20px); border: 1px solid rgba(255,255,255,0.05); box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.4); }
-                ::-webkit-scrollbar { width: 6px; } ::-webkit-scrollbar-track { background: #030303; } ::-webkit-scrollbar-thumb { background: #333; border-radius: 4px; }
+                ::-webkit-scrollbar { width: 6px; height: 6px; } ::-webkit-scrollbar-track { background: transparent; } ::-webkit-scrollbar-thumb { background: #333; border-radius: 4px; }
                 .tab-content { display: none; animation: fadeIn 0.3s ease-in-out; } .tab-content.active { display: block; }
                 @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
                 input, select { background-color: #09090b !important; }
@@ -60,7 +60,7 @@ export function attachDashboard(app, client) {
                 .selector-chip.active { transform: scale(1.15) translateY(-5px); border-color: white; box-shadow: 0 10px 20px rgba(0,0,0,0.6); z-index: 10; }
                 
                 /* Wheel Spin Animation CSS */
-                .wheel-box { width: 140px; height: 140px; border-radius: 50%; border: 6px solid #1a1a1a; background: radial-gradient(circle, #111 0%, #000 100%); display: flex; align-items: center; justify-content: center; box-shadow: 0 0 30px rgba(0,0,0,0.8), inset 0 0 20px rgba(0,0,0,0.9); position: relative; overflow: hidden; transition: all 0.3s ease; }
+                .wheel-box { width: 140px; height: 140px; border-radius: 50%; border: 6px solid #1a1a1a; background: radial-gradient(circle, #111 0%, #000 100%); display: flex; align-items: center; justify-content: center; box-shadow: 0 0 30px rgba(0,0,0,0.8), inset 0 0 20px rgba(0,0,0,0.9); position: relative; overflow: hidden; transition: all 0.3s ease; flex-shrink: 0; }
                 .wheel-number { font-size: 4rem; font-weight: 900; text-shadow: 0 4px 15px rgba(0,0,0,0.8); z-index: 10; font-variant-numeric: tabular-nums; transition: transform 0.05s ease; }
                 .spinning-glow { box-shadow: 0 0 50px #f1c40f, inset 0 0 30px #e74c3c; border-color: #f1c40f; animation: spinGlow 0.5s linear infinite; }
                 @keyframes spinGlow { 0% { filter: hue-rotate(0deg); transform: scale(1.05); } 100% { filter: hue-rotate(360deg); transform: scale(1.05); } }
@@ -114,14 +114,12 @@ export function attachDashboard(app, client) {
 
                     <div id="tab-casino" class="tab-content">
                         <div class="glass-card rounded-3xl p-8 border-t-4 border-t-green-500 relative">
-                            <div class="flex justify-between items-center mb-6 border-b border-white/5 pb-6">
-                                <div class="flex items-center gap-6">
-                                    <div class="wheel-box" id="wheelBox"><div id="wheelNumber" class="wheel-number text-green-500">0</div></div>
-                                    <div>
-                                        <h2 class="text-3xl font-black text-white mb-2 tracking-tight">Live Discord Roulette</h2>
-                                        <p class="text-gray-400 max-w-md">This table is synchronized with your server's 24/7 Live Dealer! Place bets using your <span class="bg-red-600 text-white text-xs px-2 py-1 rounded ml-1">DEMO BALANCE</span>.</p>
-                                        <p class="text-sm font-bold mt-2" id="casinoStatus"><span class="text-gray-500"><i class="fa-solid fa-spinner fa-spin"></i> Connecting to Discord...</span></p>
-                                    </div>
+                            
+                            <div class="flex justify-between items-start mb-6">
+                                <div>
+                                    <h2 class="text-3xl font-black text-white mb-2 tracking-tight">Live Discord Casino</h2>
+                                    <p class="text-gray-400 max-w-lg mb-2">Synchronized with your server's 24/7 Dealer. Filter stats and place bets using your <span class="bg-red-600 text-white text-xs px-2 py-1 rounded ml-1">DEMO BALANCE</span>.</p>
+                                    <p class="text-sm font-bold mt-2" id="casinoStatus"><span class="text-gray-500"><i class="fa-solid fa-spinner fa-spin"></i> Connecting to Discord...</span></p>
                                 </div>
                                 <div class="bg-[#09090b] px-6 py-4 rounded-2xl border border-green-500/30 flex flex-col items-end gap-2 shadow-xl">
                                     <div class="text-right">
@@ -132,22 +130,62 @@ export function attachDashboard(app, client) {
                                 </div>
                             </div>
 
-                            <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-                                <div class="bg-[#09090b] p-4 rounded-xl border border-white/5 shadow-inner">
-                                    <p class="text-[10px] text-gray-500 uppercase tracking-widest font-bold mb-2">Last 100 Spins Analytics</p>
-                                    <p class="text-sm font-bold text-white tracking-wide" id="statBreakdown"><span class="text-red-500">🔴 0%</span> <span class="text-gray-400">⚫ 0%</span> <span class="text-green-500">🟢 0%</span></p>
+                            <div class="bg-[#09090b] rounded-2xl border border-white/5 p-4 mb-6 shadow-xl">
+                                <div class="flex justify-between items-center mb-4 border-b border-white/5 pb-2">
+                                    <h4 class="text-sm font-bold text-gray-400 uppercase tracking-widest"><i class="fa-solid fa-chart-simple text-blue-500 mr-2"></i> Table Analytics</h4>
+                                    <select id="spinCountFilter" class="bg-black text-white text-xs border border-white/10 rounded px-2 py-1 outline-none font-bold">
+                                        <option value="100">Last 100 Spins</option>
+                                        <option value="200">Last 200 Spins</option>
+                                        <option value="500">Last 500 Spins</option>
+                                    </select>
                                 </div>
-                                <div class="bg-[#09090b] p-4 rounded-xl border border-white/5 shadow-inner">
-                                    <p class="text-[10px] text-gray-500 uppercase tracking-widest font-bold mb-2">🔥 Hot Numbers</p>
-                                    <p class="text-base font-black text-red-400" id="statHot">N/A</p>
+                                <div class="grid grid-cols-2 md:grid-cols-5 gap-4 text-xs font-bold mb-4">
+                                    <div class="bg-black/50 p-3 rounded-xl border border-white/5">
+                                        <p class="text-[10px] text-gray-500 uppercase tracking-widest mb-1">Colors</p>
+                                        <p id="statColors">N/A</p>
+                                    </div>
+                                    <div class="bg-black/50 p-3 rounded-xl border border-white/5">
+                                        <p class="text-[10px] text-gray-500 uppercase tracking-widest mb-1">Odd / Even</p>
+                                        <p id="statOddEven">N/A</p>
+                                    </div>
+                                    <div class="bg-black/50 p-3 rounded-xl border border-white/5">
+                                        <p class="text-[10px] text-gray-500 uppercase tracking-widest mb-1">Low / High</p>
+                                        <p id="statLowHigh">N/A</p>
+                                    </div>
+                                    <div class="bg-black/50 p-3 rounded-xl border border-white/5">
+                                        <p class="text-[10px] text-gray-500 uppercase tracking-widest mb-1">Dozens (1st/2nd/3rd)</p>
+                                        <p id="statDozens">N/A</p>
+                                    </div>
+                                    <div class="bg-black/50 p-3 rounded-xl border border-white/5">
+                                        <p class="text-[10px] text-gray-500 uppercase tracking-widest mb-1">Columns (2:1)</p>
+                                        <p id="statCols">N/A</p>
+                                    </div>
                                 </div>
-                                <div class="bg-[#09090b] p-4 rounded-xl border border-white/5 shadow-inner">
-                                    <p class="text-[10px] text-gray-500 uppercase tracking-widest font-bold mb-2">🧊 Cold Numbers</p>
-                                    <p class="text-base font-black text-blue-400" id="statCold">N/A</p>
+                                <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs font-bold">
+                                    <div class="bg-black/50 p-3 rounded-xl border border-white/5">
+                                        <p class="text-[10px] text-gray-500 uppercase tracking-widest mb-1">🔥 Hot Numbers</p>
+                                        <p id="statHot" class="text-red-400 text-sm">N/A</p>
+                                    </div>
+                                    <div class="bg-black/50 p-3 rounded-xl border border-white/5">
+                                        <p class="text-[10px] text-gray-500 uppercase tracking-widest mb-1">🧊 Cold Numbers</p>
+                                        <p id="statCold" class="text-blue-400 text-sm">N/A</p>
+                                    </div>
+                                    <div class="bg-black/50 p-3 rounded-xl border border-white/5 overflow-hidden flex flex-col justify-center">
+                                        <p class="text-[10px] text-gray-500 uppercase tracking-widest mb-1">📜 Recent Outcomes</p>
+                                        <p id="statHistory" class="text-sm whitespace-nowrap overflow-x-auto pb-1">N/A</p>
+                                    </div>
                                 </div>
-                                <div class="bg-[#09090b] p-4 rounded-xl border border-white/5 shadow-inner overflow-hidden">
-                                    <p class="text-[10px] text-gray-500 uppercase tracking-widest font-bold mb-2">📜 Spin History</p>
-                                    <p class="text-lg font-black tracking-widest whitespace-nowrap" id="statHistory">N/A</p>
+                            </div>
+
+                            <div class="flex gap-8 mb-6">
+                                <div class="flex-1 flex justify-center items-center py-4 bg-[#09090b] rounded-2xl border border-white/5 shadow-inner">
+                                    <div class="wheel-box" id="wheelBox"><div id="wheelNumber" class="wheel-number text-green-500">0</div></div>
+                                </div>
+                                <div class="w-72 bg-[#09090b] rounded-2xl border border-white/5 p-4 flex flex-col h-48 shadow-inner">
+                                    <h4 class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-2 border-b border-white/5 pb-2">Your Demo History</h4>
+                                    <div id="demoHistoryList" class="overflow-y-auto flex-1 space-y-2 text-xs font-bold pr-1">
+                                        <p class="text-gray-600 italic">Place a bet to record history...</p>
+                                    </div>
                                 </div>
                             </div>
 
@@ -161,6 +199,7 @@ export function attachDashboard(app, client) {
                                 <div class="flex-grow"></div>
                                 <button onclick="clearBets()" class="bg-red-500/20 text-red-400 border border-red-500/30 px-4 py-2 rounded-xl font-bold hover:bg-red-500/30 transition-all">Clear Bets</button>
                             </div>
+
                             <div class="roulette-board relative" id="rBoard">
                                 <div id="boardOverlay" class="absolute inset-0 bg-black/80 z-20 hidden flex flex-col items-center justify-center rounded-xl backdrop-blur-md">
                                     <p class="text-3xl font-black text-white tracking-widest mb-2" id="boardOverlayText">DEALER OFFLINE</p>
@@ -315,6 +354,7 @@ export function attachDashboard(app, client) {
                 const currentGuildId = document.getElementById('globalGuildId').value;
                 const redNumbers = [1,3,5,7,9,12,14,16,18,19,21,23,25,27,30,32,34,36];
                 let casinoSyncLoop = null; let currentCasinoPhase = 'loading'; let demoBalance = 100000; let selectedChip = 100; let activeBets = {}; 
+                let demoHistoryLog = [];
 
                 // --- TAB NAVIGATION ---
                 function switchTab(tabId) {
@@ -334,7 +374,7 @@ export function attachDashboard(app, client) {
                         'settings': { t: 'Server Settings', d: 'Configure base roles, verification, and logging.' },
                         'moderation': { t: 'Security & Moderation', d: 'Manage punishments, timeouts, and security roles.' },
                         'economy': { t: 'Economy Banker', d: 'Manage player balances, wipe accounts, and set casinos.' },
-                        'casino': { t: 'Demo Casino', d: 'Interactive frontend simulation of the bot\\\'s Roulette engine.' },
+                        'casino': { t: 'Live Discord Casino', d: 'Interactive frontend simulation synced with the bot\\\'s Roulette dealer.' },
                         'engagement': { t: 'Community Engagement', d: 'Manage Giveaways, Birthdays, and Leveling systems.' },
                         'utilities': { t: 'System Utilities', d: 'Manage Tickets, Applications, and Voice.' },
                         'guide': { t: 'Bot Documentation', d: 'Learn how to use all the bot modules and commands.' }
@@ -350,7 +390,7 @@ export function attachDashboard(app, client) {
                 if(localStorage.getItem('chaosDemoBalance')) demoBalance = parseInt(localStorage.getItem('chaosDemoBalance'));
                 function updateDemoUI() { document.getElementById('demoBalanceDisplay').innerText = '$' + demoBalance.toLocaleString(); localStorage.setItem('chaosDemoBalance', demoBalance); }
                 updateDemoUI();
-                function resetDemoBalance() { demoBalance = 100000; clearBets(); updateDemoUI(); }
+                function resetDemoBalance() { demoBalance = 100000; clearBets(); demoHistoryLog=[]; renderDemoHistory(); updateDemoUI(); }
                 function selectChip(val, el) { selectedChip = val; document.querySelectorAll('.selector-chip').forEach(c => c.classList.remove('active')); el.classList.add('active'); }
                 function clearBets() { demoBalance += Array.from(document.querySelectorAll('.r-chip')).reduce((acc, el) => acc + parseInt(el.dataset.amt), 0); activeBets = {}; document.querySelectorAll('.r-chip').forEach(el => el.remove()); updateDemoUI(); }
 
@@ -371,10 +411,29 @@ export function attachDashboard(app, client) {
                     for(let i=2; i<=35; i+=3) boardHtml += \`<div class="r-cell \${redNumbers.includes(i) ? 'r-red' : 'r-black'}" onclick="placeBet('\${i}', this)">\${i}</div>\`; boardHtml += \`<div class="r-cell" style="grid-column: 14; grid-row: 2" onclick="placeBet('col2', this)">2:1</div>\`;
                     for(let i=1; i<=34; i+=3) boardHtml += \`<div class="r-cell \${redNumbers.includes(i) ? 'r-red' : 'r-black'}" onclick="placeBet('\${i}', this)">\${i}</div>\`; boardHtml += \`<div class="r-cell" style="grid-column: 14; grid-row: 3" onclick="placeBet('col1', this)">2:1</div>\`;
                     boardHtml += \`<div class="r-cell r-transparent" style="grid-column: 1"></div><div class="r-cell" style="grid-column: span 4" onclick="placeBet('1-12', this)">1st 12</div><div class="r-cell" style="grid-column: span 4" onclick="placeBet('13-24', this)">2nd 12</div><div class="r-cell" style="grid-column: span 4" onclick="placeBet('25-36', this)">3rd 12</div>\`;
-                    boardHtml += \`<div class="r-cell r-transparent" style="grid-column: 1"></div><div class="r-cell" style="grid-column: span 2" onclick="placeBet('1-18', this)">1 to 18</div><div class="r-cell" style="grid-column: span 2" onclick="placeBet('even', this)">EVEN</div><div class="r-cell r-red" style="grid-column: span 2" onclick="placeBet('red', this)">RED</div><div class="r-cell r-black" style="grid-column: span 2" onclick="placeBet('black', this)">BLACK</div><div class="r-cell" style="grid-column: span 2" onclick="placeBet('odd', this)">ODD</div><div class="r-cell" style="grid-column: span 2" onclick="placeBet('19-36', this)">19 to 36</div>\`;
+                    boardHtml += \`<div class="r-cell r-transparent" style="grid-column: 1"></div><div class="r-cell" style="grid-column: span 2" onclick="placeBet('1-18', this)">1-18</div><div class="r-cell" style="grid-column: span 2" onclick="placeBet('even', this)">EVEN</div><div class="r-cell r-red" style="grid-column: span 2" onclick="placeBet('red', this)">RED</div><div class="r-cell r-black" style="grid-column: span 2" onclick="placeBet('black', this)">BLACK</div><div class="r-cell" style="grid-column: span 2" onclick="placeBet('odd', this)">ODD</div><div class="r-cell" style="grid-column: span 2" onclick="placeBet('19-36', this)">19-36</div>\`;
                     boardEl.innerHTML += boardHtml;
                 }
                 generateBoard();
+
+                function renderDemoHistory() {
+                    const list = document.getElementById('demoHistoryList');
+                    if(demoHistoryLog.length === 0) { list.innerHTML = '<p class="text-gray-600 italic">Place a bet to record history...</p>'; return; }
+                    let htm = '';
+                    demoHistoryLog.forEach(h => {
+                        let colorClass = h.color === 'green' ? 'bg-green-600' : (h.color === 'red' ? 'bg-red-600' : 'bg-gray-800');
+                        let profitText = h.profit > 0 ? \`<span class="text-green-400">+$out\${h.profit.toLocaleString()}</span>\` : (h.profit < 0 ? \`<span class="text-red-400">-$out\${Math.abs(h.profit).toLocaleString()}</span>\` : \`<span class="text-gray-500">$0</span>\`);
+                        profitText = profitText.replace('out', ''); // hack for string literal
+                        htm += \`<div class="flex justify-between items-center bg-black/50 p-2 rounded border border-white/5 mb-2">
+                            <div class="flex items-center gap-2">
+                                <span class="\${colorClass} text-white w-6 h-6 flex items-center justify-center rounded-full text-[10px]">\${h.num}</span>
+                                <span class="text-gray-500">Bet: $\${h.bet.toLocaleString()}</span>
+                            </div>
+                            \${profitText}
+                        </div>\`;
+                    });
+                    list.innerHTML = htm;
+                }
 
                 function startCasinoSync() {
                     if(casinoSyncLoop) clearInterval(casinoSyncLoop);
@@ -384,22 +443,36 @@ export function attachDashboard(app, client) {
                             const res = await fetch(\`/admin/api/casino/live?guildId=\${currentGuildId}\`); const data = await res.json();
                             if (!data.active) { document.getElementById('boardOverlay').classList.remove('hidden'); document.getElementById('boardOverlayText').innerText = 'DEALER OFFLINE'; return; }
                             
-                            // CALCULATE & RENDER LIVE STATS
-                            const history = data.history;
+                            // FILTER & STATS CALCULATION
+                            const filterCount = parseInt(document.getElementById('spinCountFilter').value) || 100;
+                            const history = data.history.slice(-filterCount);
+                            
                             if (history && history.length > 0) {
-                                let r=0, b=0, g=0; let freq = {};
-                                history.forEach(n => { if(n===0) g++; else if(redNumbers.includes(n)) r++; else b++; freq[n] = (freq[n] || 0) + 1; });
-                                const t = history.length;
-                                document.getElementById('statBreakdown').innerHTML = \`<span class="text-red-500">🔴 \${r} (\${((r/t)*100).toFixed(1)}%)</span> &nbsp; <span class="text-gray-400">⚫ \${b} (\${((b/t)*100).toFixed(1)}%)</span> &nbsp; <span class="text-green-500">🟢 \${g} (\${((g/t)*100).toFixed(1)}%)</span>\`;
+                                let r=0, b=0, g=0, odd=0, even=0, low=0, high=0, d1=0, d2=0, d3=0, c1=0, c2=0, c3=0; let freq = {};
+                                history.forEach(n => { 
+                                    if(n===0) g++; else if(redNumbers.includes(n)) r++; else b++; 
+                                    if(n!==0 && n%2===0) even++; else if(n!==0 && n%2!==0) odd++;
+                                    if(n>=1 && n<=18) low++; else if(n>=19 && n<=36) high++;
+                                    if(n>=1 && n<=12) d1++; else if(n>=13 && n<=24) d2++; else if(n>=25 && n<=36) d3++;
+                                    if(n!==0 && n%3===1) c1++; else if(n!==0 && n%3===2) c2++; else if(n!==0 && n%3===0) c3++;
+                                    freq[n] = (freq[n] || 0) + 1; 
+                                });
+                                const t = history.length; const pct = (v) => ((v/t)*100).toFixed(1)+'%';
+                                
+                                document.getElementById('statColors').innerHTML = \`<span class="text-red-500">🔴 \${pct(r)}</span> &nbsp; <span class="text-gray-400">⚫ \${pct(b)}</span> &nbsp; <span class="text-green-500">🟢 \${pct(g)}</span>\`;
+                                document.getElementById('statOddEven').innerHTML = \`<span class="text-yellow-400">Odd: \${pct(odd)}</span> &nbsp; <span class="text-blue-400">Even: \${pct(even)}</span>\`;
+                                document.getElementById('statLowHigh').innerHTML = \`<span class="text-gray-300">1-18: \${pct(low)}</span> &nbsp; <span class="text-gray-300">19-36: \${pct(high)}</span>\`;
+                                document.getElementById('statDozens').innerHTML = \`<span class="text-fuchsia-400">1st: \${pct(d1)}</span> &nbsp; <span class="text-fuchsia-400">2nd: \${pct(d2)}</span> &nbsp; <span class="text-fuchsia-400">3rd: \${pct(d3)}</span>\`;
+                                document.getElementById('statCols').innerHTML = \`<span class="text-orange-400">C1: \${pct(c1)}</span> &nbsp; <span class="text-orange-400">C2: \${pct(c2)}</span> &nbsp; <span class="text-orange-400">C3: \${pct(c3)}</span>\`;
                                 
                                 const sorted = Object.entries(freq).sort((x,y)=>y[1]-x[1]);
                                 document.getElementById('statHot').innerText = sorted.slice(0,5).map(x=>x[0]).join(', ') || 'N/A';
                                 const allNums = Array.from({length:37}, (_,i)=>i);
                                 document.getElementById('statCold').innerText = allNums.map(n=>[n, freq[n]||0]).sort((x,y)=>x[1]-y[1]).slice(0,5).map(x=>x[0]).join(', ');
                                 
-                                document.getElementById('statHistory').innerHTML = history.slice(-10).map(n => \`<span class="\${n === 0 ? 'text-green-400' : (redNumbers.includes(n) ? 'text-red-500' : 'text-gray-500')}">\${n}</span>\`).join(' &nbsp; ');
+                                document.getElementById('statHistory').innerHTML = history.slice(-15).map(n => \`<span class="\${n === 0 ? 'text-green-400' : (redNumbers.includes(n) ? 'text-red-500' : 'text-gray-500')}">\${n}</span>\`).join(' &nbsp; ');
                             } else {
-                                document.getElementById('statBreakdown').innerHTML = '<span class="text-gray-500">Waiting for first spin...</span>';
+                                document.getElementById('statColors').innerHTML = '<span class="text-gray-500">Waiting for spins...</span>';
                             }
 
                             if (data.status === 'betting') {
@@ -413,16 +486,16 @@ export function attachDashboard(app, client) {
                     }, 1000);
                 }
 
-                // THE NEW WHEEL SPIN ANIMATION
+                // NEW SPIN ANIMATION
                 async function triggerDashboardSpin(winningNumber) {
                     const wheel = document.getElementById('wheelNumber'); 
                     const wheelBox = document.getElementById('wheelBox');
                     wheelBox.classList.add('spinning-glow');
                     
                     let startTime = Date.now();
-                    let delay = 20;
+                    let delay = 30; // fast start
                     
-                    // Spin for exactly 7.5 seconds to perfectly match the Discord backend wait time
+                    // Spin for 7.5 seconds
                     while(Date.now() - startTime < 7500) {
                         let rand = Math.floor(Math.random() * 37);
                         wheel.innerText = rand;
@@ -430,8 +503,8 @@ export function attachDashboard(app, client) {
                         wheel.style.transform = \`scale(\${1 + Math.random()*0.1})\`;
                         
                         let elapsed = Date.now() - startTime;
-                        if(elapsed > 5000) delay = 100;
-                        if(elapsed > 6500) delay = 300;
+                        if(elapsed > 4000) delay = 100;
+                        if(elapsed > 6000) delay = 250;
                         if(elapsed > 7000) delay = 500;
                         
                         await new Promise(r => setTimeout(r, delay));
@@ -439,11 +512,12 @@ export function attachDashboard(app, client) {
                     
                     wheelBox.classList.remove('spinning-glow'); 
                     wheel.innerText = winningNumber;
-                    wheel.style.transform = 'scale(1.2)';
+                    wheel.style.transform = 'scale(1.25)';
                     wheel.style.color = winningNumber === 0 ? '#27ae60' : (redNumbers.includes(winningNumber) ? '#e74c3c' : '#7f8c8d');
                     
-                    let totalWon = 0;
+                    let totalWon = 0; let totalBet = 0;
                     for (const [betType, amt] of Object.entries(activeBets)) {
+                        totalBet += amt;
                         let won = false; let mult = 0;
                         if (betType === 'red' && redNumbers.includes(winningNumber)) { won = true; mult = 2; }
                         else if (betType === 'black' && winningNumber !== 0 && !redNumbers.includes(winningNumber)) { won = true; mult = 2; }
@@ -461,8 +535,15 @@ export function attachDashboard(app, client) {
                         if (won) totalWon += (amt * mult);
                     }
 
+                    if (totalBet > 0) {
+                        demoHistoryLog.unshift({ num: winningNumber, color: winningNumber === 0 ? 'green' : (redNumbers.includes(winningNumber) ? 'red' : 'black'), bet: totalBet, profit: (totalWon - totalBet) });
+                        if(demoHistoryLog.length > 20) demoHistoryLog.pop();
+                        renderDemoHistory();
+                    }
+
                     if (totalWon > 0) { demoBalance += totalWon; Swal.fire({title: 'You Won!', text: '+$' + totalWon.toLocaleString(), icon: 'success', background: '#09090b', color: '#fff', timer: 2000, showConfirmButton: false}); }
                     else if (Object.keys(activeBets).length > 0) Swal.fire({title: 'House Wins', text: 'Better luck next time!', icon: 'error', background: '#09090b', color: '#fff', timer: 1500, showConfirmButton: false});
+                    
                     activeBets = {}; document.querySelectorAll('.r-chip').forEach(el => el.remove()); updateDemoUI();
                 }
 
@@ -481,6 +562,7 @@ export function attachDashboard(app, client) {
         `;
     };
 
+    // 🏠 MAIN DASHBOARD ROUTE
     dashboard.get('/', async (req, res) => {
         const guild = client.guilds.cache.first();
         if (!guild) return res.send("<h1 style='color:white'>Bot is not in any servers! Invite it first.</h1>");
@@ -488,13 +570,15 @@ export function attachDashboard(app, client) {
         res.send(renderPage(client, guild, config));
     });
 
+    // Casino Sync Route (Modified to pass ALL 500 records)
     dashboard.get('/api/casino/live', async (req, res) => {
         const guildId = req.query.guildId;
         const state = liveRouletteState.get(guildId);
         if (!state) return res.json({ active: false });
-        res.json({ active: true, status: state.status, timeRemaining: state.timeRemaining, winningNumber: state.winningNumber, history: state.history.slice(-100) });
+        res.json({ active: true, status: state.status, timeRemaining: state.timeRemaining, winningNumber: state.winningNumber, history: state.history });
     });
 
+    // ⚡ API: Universal Config Saver 
     dashboard.post('/api/config/update', async (req, res) => {
         try {
             const { guildId, _action, ...settings } = req.body;
@@ -511,6 +595,7 @@ export function attachDashboard(app, client) {
         } catch (error) { res.sendStatus(500); }
     });
 
+    // ⚡ API: Economy Banker Override
     dashboard.post('/api/economy/edit', async (req, res) => {
         const { userId, guildId, action, amount } = req.body;
         try {
@@ -523,6 +608,7 @@ export function attachDashboard(app, client) {
         } catch (error) { res.sendStatus(500); }
     });
 
+    // ⚡ API: Danger Zone - Wipe Economy Data
     dashboard.post('/api/economy/wipe', async (req, res) => {
         try {
             await setEconomyData(client, req.body.guildId, req.body.userId, { wallet: 0, bank: 0, bankLevel: 0, xp: 0, level: 1, inventory: {} });
@@ -530,6 +616,7 @@ export function attachDashboard(app, client) {
         } catch (error) { res.sendStatus(500); }
     });
 
+    // ⚡ API: Moderation Actions
     dashboard.post('/api/moderation/execute', async (req, res) => {
         const { guildId, userId, action, reason, duration } = req.body;
         try {
@@ -543,6 +630,7 @@ export function attachDashboard(app, client) {
         } catch (error) { res.status(400).json({ message: "Failed." }); }
     });
 
+    // ⚡ API: Data Fetchers
     dashboard.get('/api/data/birthdays', async (req, res) => { try { res.json((await db.query('SELECT user_id, birth_month, birth_day FROM birthdays WHERE guild_id = $1 LIMIT 50', [req.query.guildId])).rows); } catch (e) { res.json([]); } });
     dashboard.get('/api/data/giveaways', async (req, res) => { try { res.json((await db.query('SELECT message_id, prize FROM giveaways WHERE guild_id = $1 AND ended = false', [req.query.guildId])).rows); } catch (e) { res.json([]); } });
     dashboard.post('/api/data/giveaways/end', async (req, res) => { try { await db.query('UPDATE giveaways SET end_time = $1 WHERE message_id = $2', [Date.now(), req.body.messageId]); res.sendStatus(200); } catch (e) { res.sendStatus(500); } });
