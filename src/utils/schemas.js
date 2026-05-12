@@ -62,7 +62,8 @@ export const GuildConfigSchema = z
     logging: LoggingConfigSchema.optional(),
     ticketLogging: TicketLoggingSchema.optional(),
     enableLogging: z.boolean().optional(),
-    verification: VerificationConfigSchema
+    verification: VerificationConfigSchema,
+    rouletteChannel: z.string().nullable().optional() // <--- ADDED HERE
   })
   .passthrough();
 
@@ -123,5 +124,3 @@ export function validateGuildConfigOrThrow(rawConfig, context = {}) {
     }
   );
 }
-
-
