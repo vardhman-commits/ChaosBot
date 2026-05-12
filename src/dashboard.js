@@ -4,11 +4,12 @@ import { getEconomyData, setEconomyData } from './utils/economy.js';
 import { getGuildConfig, updateGuildConfig } from './services/guildConfig.js';
 import { db } from './utils/database.js';
 import { WarningService } from './services/warningService.js';
-import { startPersistentRoulettes, liveRouletteState } from './commands/Economy/roulette.js'; // <--- EXPORTED STATE
+import { startPersistentRoulettes, liveRouletteState } from './commands/Economy/roulette.js';
 
 export function attachDashboard(app, client) {
     const dashboard = express.Router();
 
+    // 🔒 SECURITY
     dashboard.use(basicAuth({ users: { 'admin': 'supersecretpassword123' }, challenge: true }));
     dashboard.use(express.urlencoded({ extended: true }));
     dashboard.use(express.json());
@@ -129,9 +130,7 @@ export function attachDashboard(app, client) {
                                     <button onclick="resetDemoBalance()" class="text-xs text-gray-400 hover:text-white transition-all"><i class="fa-solid fa-rotate-right"></i> Reset to $100k</button>
                                 </div>
                             </div>
-
                             <div id="rouletteStats" class="flex gap-4 mb-6 text-sm font-bold text-gray-400"></div>
-
                             <div class="flex items-center gap-4 mb-6">
                                 <p class="text-sm font-bold text-gray-400 uppercase tracking-widest mr-4">Select Chip:</p>
                                 <div class="selector-chip val-10 text-white" onclick="selectChip(10, this)">10</div>
@@ -142,11 +141,10 @@ export function attachDashboard(app, client) {
                                 <div class="flex-grow"></div>
                                 <button onclick="clearBets()" class="bg-red-500/20 text-red-400 border border-red-500/30 px-4 py-2 rounded-xl font-bold hover:bg-red-500/30 transition-all">Clear Bets</button>
                             </div>
-
                             <div class="roulette-board relative" id="rBoard">
                                 <div id="boardOverlay" class="absolute inset-0 bg-black/70 z-20 hidden flex flex-col items-center justify-center rounded-xl backdrop-blur-md">
                                     <p class="text-3xl font-black text-white tracking-widest mb-2" id="boardOverlayText">DEALER OFFLINE</p>
-                                    <p class="text-sm text-gray-400">Start the 24/7 Dealer in the Server Settings tab to play.</p>
+                                    <p class="text-sm text-gray-400">Start the 24/7 Dealer in the Economy Banker tab to play.</p>
                                 </div>
                             </div>
                         </div>
@@ -164,7 +162,7 @@ export function attachDashboard(app, client) {
                                         <div><label class="text-xs font-bold text-gray-500 uppercase">Admin Role</label> ${buildSelect('adminRole', roles, config.adminRole, 'Admin Role')}</div>
                                         <div><label class="text-xs font-bold text-gray-500 uppercase">Mod Role</label> ${buildSelect('modRole', roles, config.modRole, 'Mod Role')}</div>
                                     </div>
-                                    <button type="submit" class="w-full bg-white/10 hover:bg-emerald-500/20 text-white font-bold py-3 rounded-xl mt-4 border border-white/10 transition-all">Save Config</button>
+                                    <button type="submit" class="w-full bg-white/10 hover:bg-emerald-500/20 text-white font-bold py-3 rounded-xl mt-4 border border-white/10 transition-all">Save Security Config</button>
                                 </form>
                             </div>
                             <div class="glass-card rounded-3xl p-8 border border-white/5 flex flex-col">
@@ -226,7 +224,7 @@ export function attachDashboard(app, client) {
                                     <form class="config-form flex gap-4">
                                         <input type="hidden" name="guildId" value="${guild.id}"><input type="hidden" name="_action" value="start_roulette">
                                         <div class="flex-1">${buildSelect('rouletteChannel', textChannels, config.rouletteChannel, 'Roulette Channel')}</div>
-                                        <button type="submit" class="bg-green-600 px-6 rounded-xl text-white font-bold hover:bg-green-500">Restart Dealer</button>
+                                        <button type="submit" class="bg-green-600 px-6 rounded-xl text-white font-bold hover:bg-green-500">Save & Restart</button>
                                     </form>
                                 </div>
                                 <div class="glass-card rounded-3xl p-8 border border-red-500/30 bg-red-500/5">
@@ -245,12 +243,14 @@ export function attachDashboard(app, client) {
                             <div class="glass-card rounded-3xl p-8 border border-white/5">
                                 <h3 class="text-2xl font-bold text-white mb-4"><i class="fa-solid fa-gift text-pink-500 mr-2"></i> Giveaway Manager</h3>
                                 <form class="config-form mb-6"><input type="hidden" name="guildId" value="${guild.id}"><label class="text-xs font-bold text-gray-500 uppercase mb-2 block">Manager Role</label><div class="flex gap-4"><div class="flex-1">${buildSelect('giveawayManagerRoleId', roles, config.giveawayManagerRoleId, 'Manager Role')}</div><button type="submit" class="bg-white/10 px-6 rounded-xl text-white font-bold hover:bg-white/20">Save</button></div></form>
-                                <button onclick="fetchGiveaways()" class="w-full bg-pink-600/20 text-pink-400 border border-pink-500/30 py-3 rounded-xl hover:bg-pink-600/30 font-bold mb-3">View Active Giveaways</button>
+                                <div class="border-t border-white/10 pt-6">
+                                    <button onclick="fetchGiveaways()" class="w-full bg-pink-600/20 text-pink-400 border border-pink-500/30 py-3 rounded-xl hover:bg-pink-600/30 font-bold mb-3">View Active Giveaways</button>
+                                </div>
                             </div>
                             <div class="space-y-6">
                                 <div class="glass-card rounded-3xl p-8 border border-white/5">
-                                    <div class="flex justify-between items-center mb-4"><h3 class="text-xl font-bold text-white"><i class="fa-solid fa-cake-candles text-teal-500 mr-2"></i> Birthdays</h3><button onclick="fetchBirthdays()" class="text-xs bg-teal-500/20 text-teal-400 px-3 py-1 rounded-lg">View List</button></div>
-                                    <form class="config-form flex gap-4"><input type="hidden" name="guildId" value="${guild.id}"><div class="flex-1">${buildSelect('birthdayChannelId', textChannels, config.birthdayChannelId, 'Announcement Channel')}</div><button type="submit" class="bg-white/10 px-6 rounded-xl text-white font-bold hover:bg-white/20 border border-white/10">Save</button></form>
+                                    <div class="flex justify-between items-center mb-4"><h3 class="text-xl font-bold text-white"><i class="fa-solid fa-cake-candles text-teal-500 mr-2"></i> Birthdays</h3><button onclick="fetchBirthdays()" class="text-xs bg-teal-500/20 text-teal-400 px-3 py-1 rounded-lg hover:bg-teal-500/30">View List</button></div>
+                                    <form class="config-form flex gap-4"><input type="hidden" name="guildId" value="${guild.id}"><div class="flex-1">${buildSelect('birthdayChannelId', textChannels, config.birthdayChannelId, 'Announcement Channel')}</div><button type="submit" class="bg-white/10 px-6 rounded-xl text-white font-bold hover:bg-white/20">Save</button></form>
                                 </div>
                             </div>
                         </div>
@@ -265,8 +265,12 @@ export function attachDashboard(app, client) {
                             <div class="space-y-6 flex flex-col">
                                 <div class="glass-card rounded-3xl p-6 border-t-2 border-t-indigo-500">
                                     <h3 class="text-xl font-bold text-white mb-2"><i class="fa-solid fa-microphone text-indigo-500 mr-2"></i> Join to Create</h3>
-                                    <form class="config-form space-y-4"><input type="hidden" name="guildId" value="${guild.id}"><div><label class="text-[10px] text-gray-500 uppercase">Master Voice Channel</label>${buildSelect('joinToCreateChannelId', voiceChannels, config.joinToCreateChannelId, 'Master Voice Channel')}</div><button type="submit" class="w-full bg-white/10 py-2 rounded-lg text-white text-sm font-bold border border-white/10">Save</button></form>
-                                    <button onclick="fetchJTCStatus()" class="w-full mt-4 border border-indigo-500/50 text-indigo-400 py-2 rounded-lg text-sm font-bold bg-indigo-500/10">View Active Sessions</button>
+                                    <form class="config-form space-y-4"><input type="hidden" name="guildId" value="${guild.id}"><div><label class="text-[10px] text-gray-500 uppercase">Master Voice Channel</label>${buildSelect('joinToCreateChannelId', voiceChannels, config.joinToCreateChannelId, 'Master Voice Channel')}</div><button type="submit" class="w-full bg-white/10 py-2 rounded-lg text-white text-sm font-bold">Save</button></form>
+                                    <button onclick="fetchJTCStatus()" class="w-full mt-4 border border-indigo-500/50 text-indigo-400 py-2 rounded-lg text-sm font-bold bg-indigo-500/10 hover:bg-indigo-500/20">View Active Sessions</button>
+                                </div>
+                                <div class="glass-card rounded-3xl p-6 border border-white/5">
+                                    <h3 class="text-lg font-bold text-white mb-3"><i class="fa-solid fa-clipboard-user text-violet-500 mr-2"></i> App Admin</h3>
+                                    <form class="config-form flex flex-col gap-3"><input type="hidden" name="guildId" value="${guild.id}">${buildSelect('appAdminChannelId', textChannels, config.appAdminChannelId, 'App Review Channel')}<button type="submit" class="bg-white/10 py-2 rounded-lg text-white text-sm font-bold">Save</button></form>
                                 </div>
                             </div>
                         </div>
@@ -377,7 +381,7 @@ export function attachDashboard(app, client) {
                 function switchTabWrap(id) { switchTab(id); if(id === 'casino') startCasinoSync(); else if(casinoSyncLoop) { clearInterval(casinoSyncLoop); casinoSyncLoop = null; } }
                 document.querySelectorAll('.nav-btn').forEach(btn => btn.onclick = () => switchTabWrap(btn.getAttribute('data-target')));
 
-                // API Forms (Same as before)
+                // API Forms 
                 document.querySelectorAll('.config-form').forEach(f => f.addEventListener('submit', async e => { e.preventDefault(); const d = Object.fromEntries(new FormData(f).entries()); await fetch('/admin/api/config/update', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(d)}); Swal.fire({title:'Saved', icon:'success', background:'#09090b', color:'#fff', timer:1500, showConfirmButton:false}); }));
                 document.getElementById('bankerForm').addEventListener('submit', async e => { e.preventDefault(); await fetch('/admin/api/economy/edit', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({userId:document.getElementById('bankUserId').value, guildId:currentGuildId, action:document.getElementById('bankAction').value, amount:document.getElementById('bankAmount').value})}); Swal.fire({title:'Success', icon:'success', background:'#09090b', color:'#fff'}); });
                 document.getElementById('wipeForm').addEventListener('submit', async e => { e.preventDefault(); const c = await Swal.fire({title:'Are you sure?', icon:'warning', showCancelButton:true, confirmButtonColor:'#dc2626', background:'#09090b', color:'#fff'}); if(c.isConfirmed) { await fetch('/admin/api/economy/wipe', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({userId:document.getElementById('wipeUserId').value, guildId:currentGuildId})}); Swal.fire({title:'Annihilated!', icon:'success', background:'#09090b', color:'#fff'}); document.getElementById('wipeUserId').value=''; } });
@@ -392,6 +396,7 @@ export function attachDashboard(app, client) {
         `;
     };
 
+    // 🏠 MAIN DASHBOARD ROUTE
     dashboard.get('/', async (req, res) => {
         const guild = client.guilds.cache.first();
         if (!guild) return res.send("<h1 style='color:white'>Bot is not in any servers! Invite it first.</h1>");
@@ -399,6 +404,7 @@ export function attachDashboard(app, client) {
         res.send(renderPage(client, guild, config));
     });
 
+    // Casino Sync Route
     dashboard.get('/api/casino/live', async (req, res) => {
         const guildId = req.query.guildId;
         const state = liveRouletteState.get(guildId);
@@ -406,6 +412,7 @@ export function attachDashboard(app, client) {
         res.json({ active: true, status: state.status, timeRemaining: state.timeRemaining, winningNumber: state.winningNumber, history: state.history.slice(-10) });
     });
 
+    // ⚡ API: Universal Config Saver 
     dashboard.post('/api/config/update', async (req, res) => {
         try {
             const { guildId, _action, ...settings } = req.body;
@@ -422,6 +429,7 @@ export function attachDashboard(app, client) {
         } catch (error) { res.sendStatus(500); }
     });
 
+    // ⚡ API: Economy Banker Override
     dashboard.post('/api/economy/edit', async (req, res) => {
         const { userId, guildId, action, amount } = req.body;
         try {
@@ -434,6 +442,7 @@ export function attachDashboard(app, client) {
         } catch (error) { res.sendStatus(500); }
     });
 
+    // ⚡ API: Danger Zone - Wipe Economy Data
     dashboard.post('/api/economy/wipe', async (req, res) => {
         try {
             await setEconomyData(client, req.body.guildId, req.body.userId, { wallet: 0, bank: 0, bankLevel: 0, xp: 0, level: 1, inventory: {} });
@@ -441,6 +450,7 @@ export function attachDashboard(app, client) {
         } catch (error) { res.sendStatus(500); }
     });
 
+    // ⚡ API: Moderation Actions
     dashboard.post('/api/moderation/execute', async (req, res) => {
         const { guildId, userId, action, reason, duration } = req.body;
         try {
@@ -454,6 +464,7 @@ export function attachDashboard(app, client) {
         } catch (error) { res.status(400).json({ message: "Failed." }); }
     });
 
+    // ⚡ API: Data Fetchers
     dashboard.get('/api/data/birthdays', async (req, res) => { try { res.json((await db.query('SELECT user_id, birth_month, birth_day FROM birthdays WHERE guild_id = $1 LIMIT 50', [req.query.guildId])).rows); } catch (e) { res.json([]); } });
     dashboard.get('/api/data/giveaways', async (req, res) => { try { res.json((await db.query('SELECT message_id, prize FROM giveaways WHERE guild_id = $1 AND ended = false', [req.query.guildId])).rows); } catch (e) { res.json([]); } });
     dashboard.post('/api/data/giveaways/end', async (req, res) => { try { await db.query('UPDATE giveaways SET end_time = $1 WHERE message_id = $2', [Date.now(), req.body.messageId]); res.sendStatus(200); } catch (e) { res.sendStatus(500); } });
