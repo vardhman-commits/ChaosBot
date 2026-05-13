@@ -389,16 +389,16 @@ async function runRouletteLoop(channel, client, guildId) {
             const gameMessage = await channel.send({ embeds: [betEmbed], components: [betButton] });
             const collector = gameMessage.createMessageComponentCollector({ time: 60000 });
 
-            // THIS IS WHERE THE MAGIC HAPPENS! We inject the menus when they click the button.
-            collector.on('collect', async (i) => {
-                if (i.customId === 'place_bet') {
-                    // Generate actual hot/cold numbers for the dropdown
-                    const hotNumbers = stats.hotRaw || [1, 2, 3, 4];
-                    const coldNumbers = stats.coldRaw || [36, 35, 34, 33];
+            // THIS IS WHERE WE FIX THE RESPOND ERROR!
+            collector.on('collect', async (buttonInteraction) => {
+                if (buttonInteraction.customId === 'place_bet') {
+                    
+                    const hotNumbers = stats.hotRaw && stats.hotRaw.length > 0 ? stats.hotRaw : [1, 2, 3, 4];
+                    const coldNumbers = stats.coldRaw && stats.coldRaw.length > 0 ? stats.coldRaw : [36, 35, 34, 33];
 
                     const row1 = new ActionRowBuilder().addComponents(
                         new StringSelectMenuBuilder()
-                            .setCustomId(`r_out_${i.id}`)
+                            .setCustomId(`r_out_${buttonInteraction.id}`)
                             .setPlaceholder('🔴 Outside Bets (1:1 Payout)')
                             .addOptions([
                                 { label: 'Red', value: 'red', emoji: '🔴' },
@@ -412,7 +412,7 @@ async function runRouletteLoop(channel, client, guildId) {
 
                     const row2 = new ActionRowBuilder().addComponents(
                         new StringSelectMenuBuilder()
-                            .setCustomId(`r_doz_${i.id}`)
+                            .setCustomId(`r_doz_${buttonInteraction.id}`)
                             .setPlaceholder('📊 Dozens & Columns (2:1 Payout)')
                             .addOptions([
                                 { label: '1st Dozen (1-12)', value: '1-12' },
@@ -426,7 +426,7 @@ async function runRouletteLoop(channel, client, guildId) {
 
                     const row3 = new ActionRowBuilder().addComponents(
                         new StringSelectMenuBuilder()
-                            .setCustomId(`r_num_${i.id}`)
+                            .setCustomId(`r_num_${buttonInteraction.id}`)
                             .setPlaceholder('🎯 Specific Numbers (35:1 Payout)')
                             .addOptions([
                                 { label: 'Zero (0)', value: '0', emoji: '🟢' },
@@ -437,7 +437,7 @@ async function runRouletteLoop(channel, client, guildId) {
 
                     const row4 = new ActionRowBuilder().addComponents(
                         new StringSelectMenuBuilder()
-                            .setCustomId(`r_fr_${i.id}`)
+                            .setCustomId(`r_fr_${buttonInteraction.id}`)
                             .setPlaceholder('🥖 French Call Bets')
                             .addOptions([
                                 { label: 'Voisins du Zéro', description: '17 numbers near zero. 9x unit cost.', value: 'voisins' },
@@ -446,77 +446,81 @@ async function runRouletteLoop(channel, client, guildId) {
                             ])
                     );
 
-                    await i.reply({ content: "Please select your bet type from the menus below:", components: [row1, row2, row3, row4], ephemeral: true });
-                }
+                    // We use fetchReply: true so we can attach a sub-collector to this exact ephemeral message!
+                    const ephemeralResponse = await buttonInteraction.reply({ content: "Please select your bet type from the menus below:", components: [row1, row2, row3, row4], ephemeral: true, fetchReply: true });
 
-                // If they select an option from ANY of the 4 dropdown menus...
-                if (i.isStringSelectMenu() && i.customId.startsWith('r_')) {
-                    const selectedBet = i.values[0];
-                    
-                    const modal = new ModalBuilder()
-                        .setCustomId(`bet_amount_modal_${i.id}`)
-                        .setTitle(`Betting on: ${selectedBet.toUpperCase()}`);
+                    // Attach the listener directly to the ephemeral dropdowns!
+                    const menuCollector = ephemeralResponse.createMessageComponentCollector({ time: 60000 });
 
-                    const betAmountInput = new TextInputBuilder()
-                        .setCustomId('bet_amount')
-                        .setLabel("Enter Chip Amount")
-                        .setPlaceholder("e.g. 500")
-                        .setStyle(TextInputStyle.Short)
-                        .setRequired(true);
-
-                    modal.addComponents(new ActionRowBuilder().addComponents(betAmountInput));
-                    await i.showModal(modal);
-
-                    try {
-                        const modalSubmit = await i.awaitModalSubmit({ filter: (mi) => mi.customId === `bet_amount_modal_${i.id}` && mi.user.id === i.user.id, time: 45000 });
-                        const rawAmount = parseInt(modalSubmit.fields.getTextInputValue('bet_amount'));
-
-                        if (isNaN(rawAmount) || rawAmount <= 0) return modalSubmit.reply({ content: '❌ Invalid chip amount!', ephemeral: true });
-
-                        const userData = await getEconomyData(client, guildId, i.user.id);
+                    menuCollector.on('collect', async (menuInteraction) => {
+                        const selectedBet = menuInteraction.values[0];
                         
-                        let type = selectedBet;
-                        let parsedBet = null;
-                        let cost = rawAmount;
-                        let isAdvanced = false;
-                        let advancedNums = [];
-                        let multiplier = 0;
+                        const modal = new ModalBuilder()
+                            .setCustomId(`bet_amount_modal_${menuInteraction.id}`)
+                            .setTitle(`Betting on: ${selectedBet.toUpperCase()}`);
 
-                        const baseValid = ['red', 'black', 'even', 'odd', '1-18', '19-36', '1-12', '13-24', '25-36', 'col1', 'col2', 'col3'];
+                        const betAmountInput = new TextInputBuilder()
+                            .setCustomId('bet_amount')
+                            .setLabel("Enter Chip Amount")
+                            .setPlaceholder("e.g. 500")
+                            .setStyle(TextInputStyle.Short)
+                            .setRequired(true);
 
-                        if (baseValid.includes(type)) {
-                            parsedBet = type;
-                        } else if (!isNaN(type) && parseInt(type) >= 0 && parseInt(type) <= 36) {
-                            parsedBet = parseInt(type).toString();
-                        } else if (type === 'voisins') {
-                            parsedBet = 'voisins'; cost = rawAmount * 9; isAdvanced = true; advancedNums = [22, 18, 29, 7, 28, 12, 35, 3, 26, 0, 32, 15, 19, 4, 21, 2, 25]; multiplier = 36;
-                        } else if (type === 'tiers') {
-                            parsedBet = 'tiers'; cost = rawAmount * 6; isAdvanced = true; advancedNums = [27, 13, 36, 11, 30, 8, 23, 10, 5, 24, 16, 33]; multiplier = 36;
-                        } else if (type === 'orphelins') {
-                            parsedBet = 'orphelins'; cost = rawAmount * 5; isAdvanced = true; advancedNums = [1, 20, 14, 31, 9, 17, 34, 6]; multiplier = 36;
+                        modal.addComponents(new ActionRowBuilder().addComponents(betAmountInput));
+                        await menuInteraction.showModal(modal); // This acknowledges the dropdown click!
+
+                        try {
+                            const modalSubmit = await menuInteraction.awaitModalSubmit({ filter: (mi) => mi.customId === `bet_amount_modal_${menuInteraction.id}` && mi.user.id === menuInteraction.user.id, time: 45000 });
+                            const rawAmount = parseInt(modalSubmit.fields.getTextInputValue('bet_amount'));
+
+                            if (isNaN(rawAmount) || rawAmount <= 0) return modalSubmit.reply({ content: '❌ Invalid chip amount!', ephemeral: true });
+
+                            const userData = await getEconomyData(client, guildId, menuInteraction.user.id);
+                            
+                            let type = selectedBet;
+                            let parsedBet = null;
+                            let cost = rawAmount;
+                            let isAdvanced = false;
+                            let advancedNums = [];
+                            let multiplier = 0;
+
+                            const baseValid = ['red', 'black', 'even', 'odd', '1-18', '19-36', '1-12', '13-24', '25-36', 'col1', 'col2', 'col3'];
+
+                            if (baseValid.includes(type)) {
+                                parsedBet = type;
+                            } else if (!isNaN(type) && parseInt(type) >= 0 && parseInt(type) <= 36) {
+                                parsedBet = parseInt(type).toString();
+                            } else if (type === 'voisins') {
+                                parsedBet = 'voisins'; cost = rawAmount * 9; isAdvanced = true; advancedNums = [22, 18, 29, 7, 28, 12, 35, 3, 26, 0, 32, 15, 19, 4, 21, 2, 25]; multiplier = 36;
+                            } else if (type === 'tiers') {
+                                parsedBet = 'tiers'; cost = rawAmount * 6; isAdvanced = true; advancedNums = [27, 13, 36, 11, 30, 8, 23, 10, 5, 24, 16, 33]; multiplier = 36;
+                            } else if (type === 'orphelins') {
+                                parsedBet = 'orphelins'; cost = rawAmount * 5; isAdvanced = true; advancedNums = [1, 20, 14, 31, 9, 17, 34, 6]; multiplier = 36;
+                            }
+
+                            if ((userData.wallet || 0) < cost) return modalSubmit.reply({ content: `❌ Not enough cash! Your balance: **$${(userData.wallet || 0).toLocaleString()}** | Bet cost: **$${cost.toLocaleString()}**`, ephemeral: true });
+
+                            await EconomyService.removeMoney(client, guildId, menuInteraction.user.id, cost, `Roulette Bet: ${parsedBet}`);
+                            
+                            currentBets.push({ 
+                                userId: menuInteraction.user.id, 
+                                userTag: menuInteraction.user.tag, 
+                                type: parsedBet, 
+                                cost: cost, 
+                                chipSize: rawAmount, 
+                                isAdvanced: isAdvanced, 
+                                advancedNums: advancedNums, 
+                                multiplier: multiplier 
+                            });
+
+                            // Tell them they succeeded and wipe out the dropdown menus
+                            await modalSubmit.reply({ content: `✅ Bet Accepted! **$${cost.toLocaleString()}** deducted for **${parsedBet.toUpperCase()}**.`, ephemeral: true });
+                            await menuInteraction.editReply({ content: '✅ Bet successfully recorded!', components: [] });
+
+                        } catch (err) {
+                            logger.error(err);
                         }
-
-                        if ((userData.wallet || 0) < cost) return modalSubmit.reply({ content: `❌ Not enough cash! Your balance: **$${(userData.wallet || 0).toLocaleString()}** | Bet cost: **$${cost.toLocaleString()}**`, ephemeral: true });
-
-                        await EconomyService.removeMoney(client, guildId, i.user.id, cost, `Roulette Bet: ${parsedBet}`);
-                        
-                        currentBets.push({ 
-                            userId: i.user.id, 
-                            userTag: i.user.tag, 
-                            type: parsedBet, 
-                            cost: cost, 
-                            chipSize: rawAmount, 
-                            isAdvanced: isAdvanced, 
-                            advancedNums: advancedNums, 
-                            multiplier: multiplier 
-                        });
-
-                        await modalSubmit.reply({ content: `✅ Bet Accepted! **$${cost.toLocaleString()}** deducted for **${parsedBet.toUpperCase()}**.`, ephemeral: true });
-                        
-                        // Close the ephemeral dropdowns by editing the original message to be empty
-                        await i.editReply({ content: '✅ Bet placed!', components: [] });
-
-                    } catch (err) { }
+                    });
                 }
             });
 
