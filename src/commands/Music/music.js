@@ -103,11 +103,20 @@ export default {
 
             // 3. Search Lavalink for the song
             const node = queue.workerObj.shoukaku.options.nodeResolver(queue.workerObj.shoukaku.nodes);
-            const result = await node.rest.resolve(query.startsWith('http') ? query : `ytsearch:${query}`);
+            
+            let result = await node.rest.resolve(query.startsWith('http') ? query : `ytsearch:${query}`);
 
-            // If nothing is found or Lavalink errors out
+            // THE BYPASS: If YouTube blocks the IP or fails, automatically fallback to SoundCloud!
             if (!result || ['empty', 'error', 'NO_MATCHES', 'LOAD_FAILED'].includes(result.loadType)) {
-                return interaction.editReply('❌ No results found for that query.');
+                if (!query.startsWith('http')) {
+                    logger.warn(`Youtube failed for "${query}". Falling back to SoundCloud...`);
+                    result = await node.rest.resolve(`scsearch:${query}`);
+                }
+            }
+
+            // If it STILL fails after the fallback
+            if (!result || ['empty', 'error', 'NO_MATCHES', 'LOAD_FAILED'].includes(result.loadType)) {
+                return interaction.editReply('❌ No results found. *(Note: If you used a YouTube/Spotify link, the platform might be blocking the server. Try typing just the song name instead!)*');
             }
 
             // 4. Safely extract the track based on Lavalink's dynamic response types
@@ -115,9 +124,9 @@ export default {
             if (result.loadType === 'PLAYLIST_LOADED' || result.loadType === 'playlist') {
                 track = result.data.tracks[0];
             } else if (Array.isArray(result.data)) {
-                track = result.data[0]; // It was a search result (Array)
+                track = result.data[0]; 
             } else {
-                track = result.data; // It was a direct link (Single Object)
+                track = result.data; 
             }
 
             if (!track || !track.info) {
