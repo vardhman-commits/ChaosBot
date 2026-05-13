@@ -2,7 +2,6 @@ import { Client, GatewayIntentBits, EmbedBuilder, ActionRowBuilder, ButtonBuilde
 import { Shoukaku, Connectors } from 'shoukaku';
 import { logger } from '../utils/logger.js';
 
-// Lavalink Node Configuration
 const Nodes = [{
     name: 'ChaosNode-Primary',
     url: `${process.env.LAVALINK_HOST}:${process.env.LAVALINK_PORT}`,
@@ -48,7 +47,6 @@ export class MusicService {
         for (let i = 0; i < tokens.length; i++) {
             const worker = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildVoiceStates] });
             
-            // Initialize Shoukaku BEFORE logging in to catch all raw voice events!
             const shoukaku = new Shoukaku(new Connectors.DiscordJS(worker), Nodes);
             
             shoukaku.on('error', (_, err) => logger.error(`Lavalink Error (Worker ${i + 1}):`, err));
@@ -115,11 +113,7 @@ export class MusicService {
 
         queue.current = queue.tracks.shift();
         
-        // --- THE FIX IS HERE ---
-        // Lavalink v4 requires the encoded string to be wrapped in a nested 'track' object
         await queue.player.playTrack({ track: { encoded: queue.current.encoded } });
-        // -----------------------
-
         await this.updatePlaybackUI(guildId);
     }
 
@@ -134,12 +128,14 @@ export class MusicService {
             .setColor(isPaused ? '#e74c3c' : '#a855f7')
             .setAuthor({ name: isPaused ? '⏸️ Paused' : '▶️ Now Playing' })
             .setTitle(trackInfo.title)
-            .setURL(trackInfo.uri)
+            .setURL(trackInfo.uri || 'https://discord.com')
             .setDescription(`👤 **Author:** ${trackInfo.author}\n⏱️ **Duration:** \`${this.formatTime(trackInfo.length)}\`\n🎵 **In Queue:** \`${queue.tracks.length}\` track(s)`)
             .setFooter({ text: `Requested by ${queue.current.requester.username} • Loop: ${queue.loop}`, iconURL: queue.current.requester.displayAvatarURL() });
 
-        if (trackInfo.uri.includes('youtube.com') || trackInfo.uri.includes('youtu.be')) {
+        if (trackInfo.uri && (trackInfo.uri.includes('youtube.com') || trackInfo.uri.includes('youtu.be'))) {
             embed.setImage(`https://img.youtube.com/vi/${trackInfo.identifier}/maxresdefault.jpg`);
+        } else if (trackInfo.artworkUrl) {
+            embed.setImage(trackInfo.artworkUrl);
         }
 
         const buttons = new ActionRowBuilder().addComponents(
