@@ -1,9 +1,10 @@
-import { SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, ModalBuilder, TextInputBuilder, TextInputStyle, ComponentType, PermissionFlagsBits, StringSelectMenuBuilder } from 'discord.js';
+import { SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, ModalBuilder, TextInputBuilder, TextInputStyle, ComponentType, PermissionFlagsBits } from 'discord.js';
 import { logger } from '../../utils/logger.js';
 import { InteractionHelper } from '../../utils/interactionHelper.js';
 import EconomyService from '../../services/economyService.js';
 import { getEconomyData, setEconomyData } from '../../utils/economy.js';
 import { getGuildConfig, updateGuildConfig } from '../../services/guildConfig.js';
+import { db } from '../../utils/database.js';
 
 const RED_NUMBERS = [1, 3, 5, 7, 9, 12, 14, 16, 18, 19, 21, 23, 25, 27, 30, 32, 34, 36];
 const WHEEL_ORDER = [0, 32, 15, 19, 4, 21, 2, 25, 17, 34, 6, 27, 13, 36, 11, 30, 8, 23, 10, 5, 24, 16, 33, 1, 20, 14, 31, 9, 22, 18, 29, 7, 28, 12, 35, 3, 26];
@@ -13,7 +14,6 @@ const activeRouletteServers = new Set();
 const globalSpinHistory = new Map();
 const userBetHistory = new Map();
 
-// The dashboard reads this map to sync the UI!
 export const liveRouletteState = new Map(); 
 
 // --- LIVE TABLE ANALYTICS ENGINE ---
@@ -21,7 +21,8 @@ function getTableStats(data) {
     if (!data || data.length === 0) {
         return {
             breakdown: "No data yet.", oddEven: "N/A", lowHigh: "N/A", dozens: "N/A", columns: "N/A",
-            hot: "N/A", cold: "N/A", historyString: "*No spins recorded yet. The table is fresh!*"
+            hot: "N/A", cold: "N/A", historyString: "*No spins recorded yet. The table is fresh!*",
+            hotRaw: [1, 2, 3, 4], coldRaw: [36, 35, 34, 33]
         };
     }
 
@@ -65,7 +66,9 @@ function getTableStats(data) {
 
     const sorted = Object.entries(freq).sort((a,b) => b[1] - a[1]);
     const hotRaw = sorted.slice(0, 4).map(x => parseInt(x[0]));
-    const coldRaw = allNums().map(n => [n, freq[n]||0]).sort((a,b) => a[1]-b[1]).slice(0,4).map(x => parseInt(x[0]));
+    
+    const allNums = Array.from({length:37}, (_,i) => i);
+    const coldRaw = allNums.map(n => [n, freq[n]||0]).sort((a,b) => a[1]-b[1]).slice(0,4).map(x => parseInt(x[0]));
     
     const hot = hotRaw.map(n => `**${n}**`).join(', ') || "N/A";
     const cold = coldRaw.map(n => `**${n}**`).join(', ') || "N/A";
@@ -78,11 +81,6 @@ function getTableStats(data) {
     return { breakdown, oddEven, lowHigh, dozens, columns, hot, cold, historyString, hotRaw, coldRaw };
 }
 
-function allNums() {
-    return Array.from({length:37}, (_,i) => i);
-}
-
-// --- BOOT PROCESS: WAKE UP THE DEALERS ---
 export async function startPersistentRoulettes(client) {
     try {
         for (const guild of client.guilds.cache.values()) {
@@ -95,28 +93,20 @@ export async function startPersistentRoulettes(client) {
                     const channel = await client.channels.fetch(channelId);
                     if (channel) {
                         activeRouletteServers.add(guildId);
-                        
                         const savedHistory = config.rouletteSpinHistory || [];
                         globalSpinHistory.set(guildId, savedHistory);
-                        
-                        logger.info(`Starting persistent 24/7 Roulette in guild ${guildId} with ${savedHistory.length} loaded spins.`);
                         runRouletteLoop(channel, client, guildId);
                     }
-                } catch (e) {
-                    logger.warn(`Could not start Roulette for guild ${guildId} - Channel ${channelId} missing or inaccessible.`);
-                }
+                } catch (e) {}
             }
         }
-    } catch (error) {
-        logger.error('Failed to load persistent roulettes on boot:', error);
-    }
+    } catch (error) {}
 }
 
 export default {
     data: new SlashCommandBuilder()
         .setName('roulette')
         .setDescription('Play the 24/7 Automated Roulette or check table statistics.')
-        
         .addSubcommand(sub =>
             sub.setName('setchannel')
             .setDescription('ADMIN ONLY: Set the channel for the 24/7 Automated Roulette dealer.')
@@ -126,7 +116,6 @@ export default {
                 .setRequired(false)
             )
         )
-        
         .addSubcommand(sub =>
             sub.setName('stats')
             .setDescription('View advanced statistics for the active Roulette table')
@@ -134,28 +123,12 @@ export default {
                 option.setName('spins')
                     .setDescription('How many past spins to analyze')
                     .setRequired(true)
-                    .addChoices(
-                        { name: 'Last 100 Spins', value: 100 },
-                        { name: 'Last 200 Spins', value: 200 },
-                        { name: 'Last 500 Spins', value: 500 }
-                    )
+                    .addChoices({ name: 'Last 100 Spins', value: 100 }, { name: 'Last 200 Spins', value: 200 }, { name: 'Last 500 Spins', value: 500 })
             )
         )
-        
-        .addSubcommand(sub =>
-            sub.setName('history')
-            .setDescription('View your personal betting history (up to the last 50 spins)')
-        )
-
-        .addSubcommand(sub =>
-            sub.setName('restart')
-            .setDescription('ADMIN ONLY: Reset the table spin history to 0.')
-        )
-
-        .addSubcommand(sub =>
-            sub.setName('reset')
-            .setDescription('ADMIN ONLY: Wipe the spin history AND all player bet histories.')
-        ),
+        .addSubcommand(sub => sub.setName('history').setDescription('View your personal betting history (up to the last 50 spins)'))
+        .addSubcommand(sub => sub.setName('restart').setDescription('ADMIN ONLY: Reset the table spin history to 0.'))
+        .addSubcommand(sub => sub.setName('reset').setDescription('ADMIN ONLY: Wipe the spin history AND all player bet histories.')),
         
     category: 'Economy',
 
@@ -163,20 +136,13 @@ export default {
         const sub = interaction.options.getSubcommand();
         const guildId = interaction.guildId;
 
-        // ==========================================
-        //         ADMIN: RESTART & RESET COMMANDS
-        // ==========================================
         if (sub === 'restart' || sub === 'reset') {
-            if (!interaction.member.permissions.has(PermissionFlagsBits.Administrator)) {
-                return interaction.reply({ content: '❌ **Access Denied.** You must be a server Administrator.', ephemeral: true });
-            }
+            if (!interaction.member.permissions.has(PermissionFlagsBits.Administrator)) return interaction.reply({ content: '❌ **Access Denied.**', ephemeral: true });
 
             globalSpinHistory.set(guildId, []);
             await updateGuildConfig(client, guildId, { rouletteSpinHistory: [] });
             
-            if (sub === 'restart') {
-                return interaction.reply({ content: '✅ **Table Restarted!** The global spin history has been wiped clean.', ephemeral: true });
-            }
+            if (sub === 'restart') return interaction.reply({ content: '✅ **Table Restarted!**', ephemeral: true });
 
             if (sub === 'reset') {
                 for (const [key, _] of userBetHistory.entries()) {
@@ -188,363 +154,275 @@ export default {
                         userBetHistory.delete(key); 
                     }
                 }
-                return interaction.reply({ content: '🔥 **Full Reset Complete!** Table spin history AND all recorded player bet histories have been destroyed.', ephemeral: true });
+                return interaction.reply({ content: '🔥 **Full Reset Complete!**', ephemeral: true });
             }
         }
 
-        // ==========================================
-        //         ADMIN: SET ROULETTE CHANNEL
-        // ==========================================
         if (sub === 'setchannel') {
-            if (!interaction.member.permissions.has(PermissionFlagsBits.Administrator)) {
-                return interaction.reply({ content: '❌ **Access Denied.** You must be a server Administrator to configure the dealer.', ephemeral: true });
-            }
+            if (!interaction.member.permissions.has(PermissionFlagsBits.Administrator)) return interaction.reply({ content: '❌ **Access Denied.**', ephemeral: true });
 
             const channel = interaction.options.getChannel('channel');
-
             if (!channel) {
                 await updateGuildConfig(client, guildId, { rouletteChannel: null });
                 activeRouletteServers.delete(guildId);
                 liveRouletteState.delete(guildId);
-                return interaction.reply({ content: '🛑 **Roulette Disabled.** The dealer will finish their current spin and leave the server.', ephemeral: true });
-            }
-
-            if (channel.type !== 0) { 
-                return interaction.reply({ content: '❌ Please select a standard Text Channel.', ephemeral: true });
+                return interaction.reply({ content: '🛑 **Roulette Disabled.**', ephemeral: true });
             }
 
             await updateGuildConfig(client, guildId, { rouletteChannel: channel.id });
-
-            if (activeRouletteServers.has(guildId)) {
-                activeRouletteServers.delete(guildId);
-                await new Promise(resolve => setTimeout(resolve, 1000));
-            }
+            if (activeRouletteServers.has(guildId)) { activeRouletteServers.delete(guildId); await new Promise(resolve => setTimeout(resolve, 1000)); }
 
             activeRouletteServers.add(guildId);
-            if (!globalSpinHistory.has(guildId)) {
-                const cfg = await getGuildConfig(client, guildId);
-                globalSpinHistory.set(guildId, cfg.rouletteSpinHistory || []);
-            }
+            if (!globalSpinHistory.has(guildId)) globalSpinHistory.set(guildId, (await getGuildConfig(client, guildId)).rouletteSpinHistory || []);
 
-            await interaction.reply({ content: `✅ **24/7 Roulette Dealer Activated!** The dealer is setting up the table in <#${channel.id}>...`, ephemeral: true });
+            await interaction.reply({ content: `✅ **24/7 Roulette Dealer Activated in <#${channel.id}>!**`, ephemeral: true });
             runRouletteLoop(channel, client, guildId);
         }
 
-        // ==========================================
-        //         PLAYER: TABLE STATS
-        // ==========================================
         if (sub === 'stats') {
             await interaction.deferReply({ ephemeral: true }).catch(() => null);
-
             const serverHistory = globalSpinHistory.get(guildId);
-            
-            if (!serverHistory || serverHistory.length === 0) {
-                return InteractionHelper.safeEditReply(interaction, { content: '❌ There is no active Roulette game, or no spins have been recorded yet!' });
-            }
+            if (!serverHistory || serverHistory.length === 0) return InteractionHelper.safeEditReply(interaction, { content: '❌ No spins recorded yet!' });
 
-            const requestedSpins = interaction.options.getInteger('spins');
-            const dataToAnalyze = serverHistory.slice(-requestedSpins); 
-            const actualSpinCount = dataToAnalyze.length;
-            const stats = getTableStats(dataToAnalyze);
-
+            const stats = getTableStats(serverHistory.slice(-interaction.options.getInteger('spins')));
             const embed = new EmbedBuilder()
-                .setTitle(`📊 Roulette Analytics (Last ${actualSpinCount} Spins)`)
+                .setTitle(`📊 Roulette Analytics`)
                 .setColor('#3498db')
-                .setDescription(`**Individual Spin Log (Oldest ➡️ Newest):**\n\n${stats.historyString}`)
+                .setDescription(`**Spin Log:**\n\n${stats.historyString}`)
                 .addFields(
-                    { name: '🎨 Colors', value: stats.breakdown, inline: true },
-                    { name: '⚖️ Odd / Even', value: stats.oddEven, inline: true },
-                    { name: '📏 Low / High', value: stats.lowHigh, inline: true },
-                    { name: '📦 Dozens', value: stats.dozens, inline: true },
-                    { name: '🏛️ Columns', value: stats.columns, inline: true },
-                    { name: '\u200B', value: '\u200B', inline: true }, 
-                    { name: '🔥 Hot Numbers', value: stats.hot, inline: true },
-                    { name: '🧊 Cold Numbers', value: stats.cold, inline: true }
+                    { name: '🎨 Colors', value: stats.breakdown, inline: true }, { name: '⚖️ Odd / Even', value: stats.oddEven, inline: true },
+                    { name: '📏 Low / High', value: stats.lowHigh, inline: true }, { name: '📦 Dozens', value: stats.dozens, inline: true },
+                    { name: '🏛️ Columns', value: stats.columns, inline: true }, { name: '\u200B', value: '\u200B', inline: true }, 
+                    { name: '🔥 Hot Numbers', value: stats.hot, inline: true }, { name: '🧊 Cold Numbers', value: stats.cold, inline: true }
                 );
-
             await InteractionHelper.safeEditReply(interaction, { embeds: [embed] });
         }
 
-        // ==========================================
-        //         PLAYER: PERSONAL BET HISTORY
-        // ==========================================
         if (sub === 'history') {
             const userHistoryKey = `${guildId}_${interaction.user.id}`;
             let history = userBetHistory.get(userHistoryKey);
 
             if (!history) {
-                const userData = await getEconomyData(client, guildId, interaction.user.id);
-                history = userData.rouletteHistory || [];
+                history = (await getEconomyData(client, guildId, interaction.user.id)).rouletteHistory || [];
                 userBetHistory.set(userHistoryKey, history);
             }
 
-            if (history.length === 0) {
-                return interaction.reply({ content: '❌ You have no recorded roulette bets in this server yet!', ephemeral: true });
-            }
+            if (history.length === 0) return interaction.reply({ content: '❌ You have no bets yet!', ephemeral: true });
 
-            const embed = new EmbedBuilder()
-                .setTitle(`🎰 Roulette Bet History (${interaction.user.username})`)
-                .setColor('#f1c40f')
-                .setFooter({ text: 'Showing up to last 50 bets' });
-
+            const embed = new EmbedBuilder().setTitle(`🎰 Bet History (${interaction.user.username})`).setColor('#f1c40f');
             let desc = '';
             history.forEach((h, i) => {
                 const outcome = h.won ? `✅ **WON $${h.payout.toLocaleString()}**` : `❌ **LOST**`;
                 const numStr = h.winningNumber === 0 ? '🟢0' : (RED_NUMBERS.includes(h.winningNumber) ? `🔴${h.winningNumber}` : `⚫${h.winningNumber}`);
-                const date = new Date(h.timestamp).toLocaleTimeString();
-                
-                let displayType = h.type.toUpperCase();
-                if(h.type.startsWith('split-')) displayType = `SPLIT (${h.type.split('-').slice(1).join(',')})`;
-                if(h.type.startsWith('corner-')) displayType = `CORNER (${h.type.split('-').slice(1).join(',')})`;
-                if(h.type.startsWith('sixline-')) displayType = `SIX LINE (${h.type.split('-').slice(1).join(',')})`;
-                if(h.type.startsWith('nb-')) displayType = `NEIGHBOURS (${h.type.split('-')[1]} ±${h.type.split('-')[2]})`;
-
-                desc += `\`${i+1}.\` [${date}] Bet **$${h.cost.toLocaleString()}** on **${displayType}** | Landed: ${numStr} | ${outcome}\n`;
+                desc += `\`${i+1}.\` Bet **$${h.cost.toLocaleString()}** on **${h.type.toUpperCase()}** | Landed: ${numStr} | ${outcome}\n`;
             });
-
-            if (desc.length > 4000) {
-                desc = desc.substring(0, 4000) + '...\n\n*(Truncated due to Discord character limits)*';
-            }
-
-            embed.setDescription(desc);
+            embed.setDescription(desc.substring(0, 4000));
             await interaction.reply({ embeds: [embed], ephemeral: true });
         }
     }
 };
 
-// ==========================================
-//      AUTOMATED ROULETTE ENGINE LOOP
-// ==========================================
 async function runRouletteLoop(channel, client, guildId) {
-
     try {
         const msgs = await channel.messages.fetch({ limit: 15 });
-        const oldGameMsgs = msgs.filter(m => m.author.id === client.user.id && m.embeds[0] && m.embeds[0].title && m.embeds[0].title.includes('ROULETTE'));
-        for (const msg of oldGameMsgs.values()) {
-            await msg.delete().catch(() => null);
-        }
+        const oldGameMsgs = msgs.filter(m => m.author.id === client.user.id && m.embeds[0]?.title?.includes('ROULETTE'));
+        for (const msg of oldGameMsgs.values()) await msg.delete().catch(() => null);
     } catch(e) {}
 
     while (activeRouletteServers.has(guildId)) {
         try {
             const currentConfig = await getGuildConfig(client, guildId);
-            if (currentConfig.rouletteChannel !== channel.id) {
-                activeRouletteServers.delete(guildId);
-                break;
-            }
+            if (currentConfig.rouletteChannel !== channel.id) { activeRouletteServers.delete(guildId); break; }
 
             let currentBets = [];
             let spinHistory = globalSpinHistory.get(guildId) || [];
-            
             const stats = getTableStats(spinHistory.slice(-100));
+
+            // Grab the actual hot and cold numbers
+            const hN = stats.hotRaw && stats.hotRaw.length >= 4 ? stats.hotRaw : [1, 2, 3, 4];
+            const cN = stats.coldRaw && stats.coldRaw.length >= 4 ? stats.coldRaw : [36, 35, 34, 33];
 
             let timeLeft = 60;
             liveRouletteState.set(guildId, { status: 'betting', timeRemaining: timeLeft, winningNumber: null, history: spinHistory });
-            
-            const timerInterval = setInterval(() => {
-                timeLeft--;
-                const state = liveRouletteState.get(guildId);
-                if (state) state.timeRemaining = timeLeft;
-            }, 1000);
-
-            const tableArt = `
-🟢 **0**
-🔴 **1** ┃ ⚫ **2** ┃ 🔴 **3** | *1st 12*
-⚫ **4** ┃ 🔴 **5** ┃ ⚫ **6** |
-🔴 **7** ┃ ⚫ **8** ┃ 🔴 **9** |
-⚫ **10**┃ ⚫ **11**┃ 🔴 **12** |
-⚫ **13**┃ 🔴 **14**┃ ⚫ **15** | *2nd 12*
-🔴 **16**┃ ⚫ **17**┃ 🔴 **18** |
-🔴 **19**┃ ⚫ **20**┃ 🔴 **21** |
-⚫ **22**┃ 🔴 **23**┃ ⚫ **24** |
-🔴 **25**┃ ⚫ **26**┃ 🔴 **27** | *3rd 12*
-⚫ **28**┃ ⚫ **29**┃ 🔴 **30** |
-⚫ **31**┃ 🔴 **32**┃ ⚫ **33** |
-🔴 **34**┃ ⚫ **35**┃ 🔴 **36** |
-*Col1* *Col2* *Col3*`;
+            const timerInterval = setInterval(() => { timeLeft--; const state = liveRouletteState.get(guildId); if (state) state.timeRemaining = timeLeft; }, 1000);
 
             const betEmbed = new EmbedBuilder()
                 .setTitle('🎰 LIVE DEALER ROULETTE 🎰')
                 .setColor('#2ecc71')
-                .setDescription(`**Betting is OPEN!** You have **1 Minute** to place your bets.\nClick the button below to play.`)
+                .setDescription(`**Betting is OPEN!** You have **1 Minute** to place your bets.\nUse the quick buttons below or click "Custom Bet"!`)
                 .addFields(
-                    { name: '🎨 Colors', value: stats.breakdown, inline: true },
-                    { name: '⚖️ Odd / Even', value: stats.oddEven, inline: true },
-                    { name: '📏 Low / High', value: stats.lowHigh, inline: true },
-                    { name: '📦 Dozens', value: stats.dozens, inline: true },
-                    { name: '🏛️ Columns', value: stats.columns, inline: true },
-                    { name: '\u200b', value: '\u200b', inline: true },
                     { name: '🔥 Hot Numbers', value: stats.hot, inline: true },
                     { name: '🧊 Cold Numbers', value: stats.cold, inline: true },
-                    { name: '\u200b', value: '\u200b', inline: true },
                     { name: `📜 Spin History (Last ${Math.min(spinHistory.length, 100)})`, value: stats.historyString, inline: false },
-                    { name: 'Roulette Board', value: tableArt, inline: false }
+                    { name: 'Roulette Board', value: `🟢 **0**\n🔴 **1** ┃ ⚫ **2** ┃ 🔴 **3** | *1st 12*\n⚫ **4** ┃ 🔴 **5** ┃ ⚫ **6** |\n🔴 **7** ┃ ⚫ **8** ┃ 🔴 **9** |\n⚫ **10**┃ ⚫ **11**┃ 🔴 **12** |\n⚫ **13**┃ 🔴 **14**┃ ⚫ **15** | *2nd 12*\n🔴 **16**┃ ⚫ **17**┃ 🔴 **18** |\n🔴 **19**┃ ⚫ **20**┃ 🔴 **21** |\n⚫ **22**┃ 🔴 **23**┃ ⚫ **24** |\n🔴 **25**┃ ⚫ **26**┃ 🔴 **27** | *3rd 12*\n⚫ **28**┃ ⚫ **29**┃ 🔴 **30** |\n⚫ **31**┃ 🔴 **32**┃ ⚫ **33** |\n🔴 **34**┃ ⚫ **35**┃ 🔴 **36** |\n*Col1* *Col2* *Col3*`, inline: false }
                 )
                 .setFooter({ text: `The Dealer is waiting for bets... • Total Server Spins: ${spinHistory.length}` });
 
-            const betButton = new ActionRowBuilder().addComponents(
-                new ButtonBuilder().setCustomId('place_bet').setLabel('💰 Place Your Bet').setStyle(ButtonStyle.Success)
+            // Exactly 25 Buttons (Discord Limit = 5 ActionRows x 5 Buttons)
+            const row1 = new ActionRowBuilder().addComponents(
+                new ButtonBuilder().setCustomId('place_custom_bet').setLabel('✏️ Custom Bet').setStyle(ButtonStyle.Success),
+                new ButtonBuilder().setCustomId('qbet_red').setLabel('🔴 Red').setStyle(ButtonStyle.Danger),
+                new ButtonBuilder().setCustomId('qbet_black').setLabel('⚫ Black').setStyle(ButtonStyle.Secondary),
+                new ButtonBuilder().setCustomId('qbet_even').setLabel('Even').setStyle(ButtonStyle.Primary),
+                new ButtonBuilder().setCustomId('qbet_odd').setLabel('Odd').setStyle(ButtonStyle.Primary)
             );
 
-            const gameMessage = await channel.send({ embeds: [betEmbed], components: [betButton] });
-            const collector = gameMessage.createMessageComponentCollector({ time: 60000 });
+            const row2 = new ActionRowBuilder().addComponents(
+                new ButtonBuilder().setCustomId('qbet_1-18').setLabel('1-18').setStyle(ButtonStyle.Primary),
+                new ButtonBuilder().setCustomId('qbet_19-36').setLabel('19-36').setStyle(ButtonStyle.Primary),
+                new ButtonBuilder().setCustomId('qbet_1-12').setLabel('1st 12').setStyle(ButtonStyle.Secondary),
+                new ButtonBuilder().setCustomId('qbet_13-24').setLabel('2nd 12').setStyle(ButtonStyle.Secondary),
+                new ButtonBuilder().setCustomId('qbet_25-36').setLabel('3rd 12').setStyle(ButtonStyle.Secondary)
+            );
 
-            // THIS IS WHERE WE FIX THE RESPOND ERROR!
-            collector.on('collect', async (buttonInteraction) => {
-                if (buttonInteraction.customId === 'place_bet') {
-                    
-                    const hotNumbers = stats.hotRaw && stats.hotRaw.length > 0 ? stats.hotRaw : [1, 2, 3, 4];
-                    const coldNumbers = stats.coldRaw && stats.coldRaw.length > 0 ? stats.coldRaw : [36, 35, 34, 33];
+            const row3 = new ActionRowBuilder().addComponents(
+                new ButtonBuilder().setCustomId('qbet_col1').setLabel('Col 1').setStyle(ButtonStyle.Secondary),
+                new ButtonBuilder().setCustomId('qbet_col2').setLabel('Col 2').setStyle(ButtonStyle.Secondary),
+                new ButtonBuilder().setCustomId('qbet_col3').setLabel('Col 3').setStyle(ButtonStyle.Secondary),
+                new ButtonBuilder().setCustomId('qbet_voisins').setLabel('Voisins').setStyle(ButtonStyle.Primary),
+                new ButtonBuilder().setCustomId('qbet_tiers').setLabel('Tiers').setStyle(ButtonStyle.Primary)
+            );
 
-                    const row1 = new ActionRowBuilder().addComponents(
-                        new StringSelectMenuBuilder()
-                            .setCustomId(`r_out_${buttonInteraction.id}`)
-                            .setPlaceholder('🔴 Outside Bets (1:1 Payout)')
-                            .addOptions([
-                                { label: 'Red', value: 'red', emoji: '🔴' },
-                                { label: 'Black', value: 'black', emoji: '⚫' },
-                                { label: 'Even', value: 'even', emoji: '🔢' },
-                                { label: 'Odd', value: 'odd', emoji: '🔡' },
-                                { label: 'Low (1-18)', value: '1-18', emoji: '📉' },
-                                { label: 'High (19-36)', value: '19-36', emoji: '📈' }
-                            ])
-                    );
+            const row4 = new ActionRowBuilder().addComponents(
+                new ButtonBuilder().setCustomId('qbet_orphelins').setLabel('Orphelins').setStyle(ButtonStyle.Primary),
+                new ButtonBuilder().setCustomId('qbet_num_0').setLabel('🟢 0').setStyle(ButtonStyle.Success),
+                new ButtonBuilder().setCustomId(`qbet_num_${hN[0]}_h1`).setLabel(`🔥 ${hN[0]}`).setStyle(ButtonStyle.Danger),
+                new ButtonBuilder().setCustomId(`qbet_num_${hN[1]}_h2`).setLabel(`🔥 ${hN[1]}`).setStyle(ButtonStyle.Danger),
+                new ButtonBuilder().setCustomId(`qbet_num_${hN[2]}_h3`).setLabel(`🔥 ${hN[2]}`).setStyle(ButtonStyle.Danger)
+            );
 
-                    const row2 = new ActionRowBuilder().addComponents(
-                        new StringSelectMenuBuilder()
-                            .setCustomId(`r_doz_${buttonInteraction.id}`)
-                            .setPlaceholder('📊 Dozens & Columns (2:1 Payout)')
-                            .addOptions([
-                                { label: '1st Dozen (1-12)', value: '1-12' },
-                                { label: '2nd Dozen (13-24)', value: '13-24' },
-                                { label: '3rd Dozen (25-36)', value: '25-36' },
-                                { label: '1st Column', value: 'col1' },
-                                { label: '2nd Column', value: 'col2' },
-                                { label: '3rd Column', value: 'col3' }
-                            ])
-                    );
+            const row5 = new ActionRowBuilder().addComponents(
+                new ButtonBuilder().setCustomId(`qbet_num_${hN[3]}_h4`).setLabel(`🔥 ${hN[3]}`).setStyle(ButtonStyle.Danger),
+                new ButtonBuilder().setCustomId(`qbet_num_${cN[0]}_c1`).setLabel(`🧊 ${cN[0]}`).setStyle(ButtonStyle.Primary),
+                new ButtonBuilder().setCustomId(`qbet_num_${cN[1]}_c2`).setLabel(`🧊 ${cN[1]}`).setStyle(ButtonStyle.Primary),
+                new ButtonBuilder().setCustomId(`qbet_num_${cN[2]}_c3`).setLabel(`🧊 ${cN[2]}`).setStyle(ButtonStyle.Primary),
+                new ButtonBuilder().setCustomId(`qbet_num_${cN[3]}_c4`).setLabel(`🧊 ${cN[3]}`).setStyle(ButtonStyle.Primary)
+            );
 
-                    const row3 = new ActionRowBuilder().addComponents(
-                        new StringSelectMenuBuilder()
-                            .setCustomId(`r_num_${buttonInteraction.id}`)
-                            .setPlaceholder('🎯 Specific Numbers (35:1 Payout)')
-                            .addOptions([
-                                { label: 'Zero (0)', value: '0', emoji: '🟢' },
-                                ...hotNumbers.map(n => ({ label: `Hot Number: ${n}`, value: `${n}`, emoji: '🔥' })),
-                                ...coldNumbers.map(n => ({ label: `Cold Number: ${n}`, value: `${n}`, emoji: '🧊' }))
-                            ])
-                    );
+            const gameMessage = await channel.send({ embeds: [betEmbed], components: [row1, row2, row3, row4, row5] });
+            const collector = gameMessage.createMessageComponentCollector({ componentType: ComponentType.Button, time: 60000 });
 
-                    const row4 = new ActionRowBuilder().addComponents(
-                        new StringSelectMenuBuilder()
-                            .setCustomId(`r_fr_${buttonInteraction.id}`)
-                            .setPlaceholder('🥖 French Call Bets')
-                            .addOptions([
-                                { label: 'Voisins du Zéro', description: '17 numbers near zero. 9x unit cost.', value: 'voisins' },
-                                { label: 'Tiers du Cylindre', description: '12 numbers opposite zero. 6x unit cost.', value: 'tiers' },
-                                { label: 'Orphelins', description: '8 remaining numbers. 5x unit cost.', value: 'orphelins' }
-                            ])
-                    );
+            collector.on('collect', async (i) => {
+                try {
+                    let rawTypeToProcess = '';
 
-                    // We use fetchReply: true so we can attach a sub-collector to this exact ephemeral message!
-                    const ephemeralResponse = await buttonInteraction.reply({ content: "Please select your bet type from the menus below:", components: [row1, row2, row3, row4], ephemeral: true, fetchReply: true });
-
-                    // Attach the listener directly to the ephemeral dropdowns!
-                    const menuCollector = ephemeralResponse.createMessageComponentCollector({ time: 60000 });
-
-                    menuCollector.on('collect', async (menuInteraction) => {
-                        const selectedBet = menuInteraction.values[0];
+                    if (i.customId === 'place_custom_bet') {
+                        // Original 2-Input Modal
+                        const modal = new ModalBuilder().setCustomId(`bet_custom_${i.id}`).setTitle('Custom Roulette Bet');
+                        const typeInput = new TextInputBuilder().setCustomId('bet_type').setLabel("Bet type (e.g. split 5,8, nb 0 2)").setStyle(TextInputStyle.Short).setRequired(true);
+                        const amountInput = new TextInputBuilder().setCustomId('bet_amount').setLabel("Chip Amount (e.g. 500)").setStyle(TextInputStyle.Short).setRequired(true);
+                        modal.addComponents(new ActionRowBuilder().addComponents(typeInput), new ActionRowBuilder().addComponents(amountInput));
                         
-                        const modal = new ModalBuilder()
-                            .setCustomId(`bet_amount_modal_${menuInteraction.id}`)
-                            .setTitle(`Betting on: ${selectedBet.toUpperCase()}`);
+                        await i.showModal(modal);
+                        const modalSubmit = await i.awaitModalSubmit({ filter: mi => mi.customId === `bet_custom_${i.id}`, time: 45000 });
+                        
+                        // FIX: Instant defer prevents the "Interaction Failed" DB timeout!
+                        await modalSubmit.deferReply({ ephemeral: true });
+                        
+                        rawTypeToProcess = modalSubmit.fields.getTextInputValue('bet_type').toLowerCase().trim();
+                        await processBetLogic(modalSubmit, rawTypeToProcess, parseInt(modalSubmit.fields.getTextInputValue('bet_amount')), i.user);
+                    } 
+                    else if (i.customId.startsWith('qbet_')) {
+                        // New 1-Input Quick Bet Modal
+                        const parts = i.customId.split('_');
+                        let betLabel = parts[1];
+                        if (betLabel === 'num') betLabel = parts[2]; // handle specific numbers
+                        
+                        rawTypeToProcess = betLabel;
 
-                        const betAmountInput = new TextInputBuilder()
-                            .setCustomId('bet_amount')
-                            .setLabel("Enter Chip Amount")
-                            .setPlaceholder("e.g. 500")
-                            .setStyle(TextInputStyle.Short)
-                            .setRequired(true);
-
-                        modal.addComponents(new ActionRowBuilder().addComponents(betAmountInput));
-                        await menuInteraction.showModal(modal); // This acknowledges the dropdown click!
-
-                        try {
-                            const modalSubmit = await menuInteraction.awaitModalSubmit({ filter: (mi) => mi.customId === `bet_amount_modal_${menuInteraction.id}` && mi.user.id === menuInteraction.user.id, time: 45000 });
-                            const rawAmount = parseInt(modalSubmit.fields.getTextInputValue('bet_amount'));
-
-                            if (isNaN(rawAmount) || rawAmount <= 0) return modalSubmit.reply({ content: '❌ Invalid chip amount!', ephemeral: true });
-
-                            const userData = await getEconomyData(client, guildId, menuInteraction.user.id);
-                            
-                            let type = selectedBet;
-                            let parsedBet = null;
-                            let cost = rawAmount;
-                            let isAdvanced = false;
-                            let advancedNums = [];
-                            let multiplier = 0;
-
-                            const baseValid = ['red', 'black', 'even', 'odd', '1-18', '19-36', '1-12', '13-24', '25-36', 'col1', 'col2', 'col3'];
-
-                            if (baseValid.includes(type)) {
-                                parsedBet = type;
-                            } else if (!isNaN(type) && parseInt(type) >= 0 && parseInt(type) <= 36) {
-                                parsedBet = parseInt(type).toString();
-                            } else if (type === 'voisins') {
-                                parsedBet = 'voisins'; cost = rawAmount * 9; isAdvanced = true; advancedNums = [22, 18, 29, 7, 28, 12, 35, 3, 26, 0, 32, 15, 19, 4, 21, 2, 25]; multiplier = 36;
-                            } else if (type === 'tiers') {
-                                parsedBet = 'tiers'; cost = rawAmount * 6; isAdvanced = true; advancedNums = [27, 13, 36, 11, 30, 8, 23, 10, 5, 24, 16, 33]; multiplier = 36;
-                            } else if (type === 'orphelins') {
-                                parsedBet = 'orphelins'; cost = rawAmount * 5; isAdvanced = true; advancedNums = [1, 20, 14, 31, 9, 17, 34, 6]; multiplier = 36;
-                            }
-
-                            if ((userData.wallet || 0) < cost) return modalSubmit.reply({ content: `❌ Not enough cash! Your balance: **$${(userData.wallet || 0).toLocaleString()}** | Bet cost: **$${cost.toLocaleString()}**`, ephemeral: true });
-
-                            await EconomyService.removeMoney(client, guildId, menuInteraction.user.id, cost, `Roulette Bet: ${parsedBet}`);
-                            
-                            currentBets.push({ 
-                                userId: menuInteraction.user.id, 
-                                userTag: menuInteraction.user.tag, 
-                                type: parsedBet, 
-                                cost: cost, 
-                                chipSize: rawAmount, 
-                                isAdvanced: isAdvanced, 
-                                advancedNums: advancedNums, 
-                                multiplier: multiplier 
-                            });
-
-                            // Tell them they succeeded and wipe out the dropdown menus
-                            await modalSubmit.reply({ content: `✅ Bet Accepted! **$${cost.toLocaleString()}** deducted for **${parsedBet.toUpperCase()}**.`, ephemeral: true });
-                            await menuInteraction.editReply({ content: '✅ Bet successfully recorded!', components: [] });
-
-                        } catch (err) {
-                            logger.error(err);
-                        }
-                    });
+                        const modal = new ModalBuilder().setCustomId(`bet_quick_${i.id}`).setTitle(`Quick Bet: ${betLabel.toUpperCase()}`);
+                        const amountInput = new TextInputBuilder().setCustomId('bet_amount').setLabel("Chip Amount (e.g. 500)").setStyle(TextInputStyle.Short).setRequired(true);
+                        modal.addComponents(new ActionRowBuilder().addComponents(amountInput));
+                        
+                        await i.showModal(modal);
+                        const modalSubmit = await i.awaitModalSubmit({ filter: mi => mi.customId === `bet_quick_${i.id}`, time: 45000 });
+                        
+                        // FIX: Instant defer prevents the "Interaction Failed" DB timeout!
+                        await modalSubmit.deferReply({ ephemeral: true });
+                        
+                        await processBetLogic(modalSubmit, rawTypeToProcess, parseInt(modalSubmit.fields.getTextInputValue('bet_amount')), i.user);
+                    }
+                } catch (err) {
+                    // Ignored - usually just means the user closed the modal without typing anything
                 }
             });
 
+            // Shared Bet Processing Engine
+            async function processBetLogic(modalSubmit, type, cost, user) {
+                if (isNaN(cost) || cost <= 0) return modalSubmit.editReply({ content: '❌ Invalid chip amount!' });
+
+                let parsedBet = null;
+                let isAdvanced = false;
+                let advancedNums = [];
+                let multiplier = 0;
+
+                const baseValid = ['red', 'black', 'even', 'odd', '1-18', '19-36', '1-12', '13-24', '25-36', 'col1', 'col2', 'col3'];
+                const typeNoSpace = type.replace(/\s/g, '');
+
+                if (baseValid.includes(typeNoSpace)) {
+                    parsedBet = typeNoSpace;
+                } else if (!isNaN(typeNoSpace) && parseInt(typeNoSpace) >= 0 && parseInt(typeNoSpace) <= 36) {
+                    parsedBet = parseInt(typeNoSpace).toString();
+                } else if (type === 'voisins') {
+                    parsedBet = 'voisins'; cost = cost * 9; isAdvanced = true; advancedNums = [22, 18, 29, 7, 28, 12, 35, 3, 26, 0, 32, 15, 19, 4, 21, 2, 25]; multiplier = 36;
+                } else if (type === 'tiers') {
+                    parsedBet = 'tiers'; cost = cost * 6; isAdvanced = true; advancedNums = [27, 13, 36, 11, 30, 8, 23, 10, 5, 24, 16, 33]; multiplier = 36;
+                } else if (type === 'orphelins') {
+                    parsedBet = 'orphelins'; cost = cost * 5; isAdvanced = true; advancedNums = [1, 20, 14, 31, 9, 17, 34, 6]; multiplier = 36;
+                } else if (type.startsWith('nb') || type.startsWith('neighbour')) {
+                    const parts = type.match(/[0-9]+/g);
+                    if (parts && parts.length === 2) {
+                        const target = parseInt(parts[0]); const dist = parseInt(parts[1]);
+                        if (target >= 0 && target <= 36 && dist >= 1 && dist <= 5) {
+                            const idx = WHEEL_ORDER.indexOf(target);
+                            for(let k = -dist; k <= dist; k++) { let x = (idx + k) % 37; if(x < 0) x += 37; advancedNums.push(WHEEL_ORDER[x]); }
+                            parsedBet = `nb-${target}-${dist}`; cost = cost * advancedNums.length; isAdvanced = true; multiplier = 36;
+                        }
+                    }
+                } else if (type.startsWith('split')) {
+                    const parts = type.match(/[0-9]+/g);
+                    if (parts && parts.length === 2) { parsedBet = `split-${parts.join('-')}`; isAdvanced = true; advancedNums = parts.map(Number); multiplier = 18; }
+                } else if (type.startsWith('corner')) {
+                    const parts = type.match(/[0-9]+/g);
+                    if (parts && parts.length === 4) { parsedBet = `corner-${parts.join('-')}`; isAdvanced = true; advancedNums = parts.map(Number); multiplier = 9; }
+                } else if (type.startsWith('sixline')) {
+                    const parts = type.match(/[0-9]+/g);
+                    if (parts && parts.length === 6) { parsedBet = `sixline-${parts.join('-')}`; isAdvanced = true; advancedNums = parts.map(Number); multiplier = 6; }
+                }
+
+                if (!parsedBet) return modalSubmit.editReply({ content: "❌ Invalid bet! Check formatting." });
+
+                const userData = await getEconomyData(client, guildId, user.id);
+                if ((userData.wallet || 0) < cost) return modalSubmit.editReply({ content: `❌ Not enough cash! Your balance: **$${(userData.wallet || 0).toLocaleString()}** | Bet cost: **$${cost.toLocaleString()}**` });
+
+                await EconomyService.removeMoney(client, guildId, user.id, cost, `Roulette Bet: ${parsedBet}`);
+                
+                currentBets.push({ userId: user.id, userTag: user.tag, type: parsedBet, cost: cost, chipSize: (isAdvanced ? cost/(multiplier===18?2:(multiplier===9?4:(multiplier===6?6:advancedNums.length))) : cost), isAdvanced: isAdvanced, advancedNums: advancedNums, multiplier: multiplier });
+
+                await modalSubmit.editReply({ content: `✅ Bet Accepted! **$${cost.toLocaleString()}** deducted for **${parsedBet.toUpperCase()}**.` });
+            }
+
             await new Promise(resolve => setTimeout(resolve, 60000));
             collector.stop();
-
             clearInterval(timerInterval);
             if (!activeRouletteServers.has(guildId)) break;
 
-            betButton.components[0].setDisabled(true);
+            const disabledRow1 = ActionRowBuilder.from(row1).components.map(b => ButtonBuilder.from(b).setDisabled(true));
+            const disabledRow2 = ActionRowBuilder.from(row2).components.map(b => ButtonBuilder.from(b).setDisabled(true));
+            const disabledRow3 = ActionRowBuilder.from(row3).components.map(b => ButtonBuilder.from(b).setDisabled(true));
+            const disabledRow4 = ActionRowBuilder.from(row4).components.map(b => ButtonBuilder.from(b).setDisabled(true));
+            const disabledRow5 = ActionRowBuilder.from(row5).components.map(b => ButtonBuilder.from(b).setDisabled(true));
 
             const winningNumber = Math.floor(Math.random() * 37);
             const state = liveRouletteState.get(guildId);
-            if (state) {
-                state.status = 'spinning';
-                state.winningNumber = winningNumber;
-            }
+            if (state) { state.status = 'spinning'; state.winningNumber = winningNumber; }
 
             const spinningEmbed = new EmbedBuilder()
                 .setTitle('🎰 ROULETTE SPINNING... 🎰')
                 .setColor('#f1c40f')
                 .setDescription(`**NO MORE BETS!**\n\nThe Dealer is spinning the wheel...\nTotal Bets Placed: **${currentBets.length}**`);
 
-            await gameMessage.edit({ embeds: [spinningEmbed], components: [betButton] });
+            await gameMessage.edit({ embeds: [spinningEmbed], components: [new ActionRowBuilder().addComponents(disabledRow1), new ActionRowBuilder().addComponents(disabledRow2), new ActionRowBuilder().addComponents(disabledRow3), new ActionRowBuilder().addComponents(disabledRow4), new ActionRowBuilder().addComponents(disabledRow5)] });
             
             await new Promise(resolve => setTimeout(resolve, 8000));
 
@@ -568,9 +446,7 @@ async function runRouletteLoop(channel, client, guildId) {
                 let won = false; let payout = 0;
 
                 if (bet.isAdvanced) {
-                    if (bet.advancedNums.includes(winningNumber)) {
-                        won = true; payout = bet.chipSize * bet.multiplier;
-                    }
+                    if (bet.advancedNums.includes(winningNumber)) { won = true; payout = bet.chipSize * bet.multiplier; }
                 } else {
                     let mult = 0;
                     if (bet.type === 'red' && isRed) { won = true; mult = 2; }
@@ -597,21 +473,9 @@ async function runRouletteLoop(channel, client, guildId) {
 
                 const userHistoryKey = `${guildId}_${bet.userId}`;
                 let userHist = userBetHistory.get(userHistoryKey);
-                
-                if (!userHist) {
-                    const uData = await getEconomyData(client, guildId, bet.userId);
-                    userHist = uData.rouletteHistory || [];
-                }
+                if (!userHist) { const uData = await getEconomyData(client, guildId, bet.userId); userHist = uData.rouletteHistory || []; }
 
-                userHist.unshift({
-                    type: bet.type.toUpperCase(),
-                    cost: bet.cost,
-                    won: won,
-                    payout: payout,
-                    winningNumber: winningNumber,
-                    timestamp: Date.now()
-                });
-                
+                userHist.unshift({ type: bet.type.toUpperCase(), cost: bet.cost, won: won, payout: payout, winningNumber: winningNumber, timestamp: Date.now() });
                 if (userHist.length > 50) userHist.pop();
                 userBetHistory.set(userHistoryKey, userHist);
 
