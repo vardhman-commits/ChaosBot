@@ -142,7 +142,7 @@ export default {
             globalSpinHistory.set(guildId, []);
             await updateGuildConfig(client, guildId, { rouletteSpinHistory: [] });
             
-            if (sub === 'restart') return interaction.reply({ content: '✅ **Table Restarted!**', ephemeral: true });
+            if (sub === 'restart') return interaction.reply({ content: '✅ **Table Restarted!** The global spin history has been wiped clean.', ephemeral: true });
 
             if (sub === 'reset') {
                 for (const [key, _] of userBetHistory.entries()) {
@@ -154,7 +154,7 @@ export default {
                         userBetHistory.delete(key); 
                     }
                 }
-                return interaction.reply({ content: '🔥 **Full Reset Complete!**', ephemeral: true });
+                return interaction.reply({ content: '🔥 **Full Reset Complete!** Table spin history AND all recorded player bet histories have been destroyed.', ephemeral: true });
             }
         }
 
@@ -246,15 +246,46 @@ async function runRouletteLoop(channel, client, guildId) {
             liveRouletteState.set(guildId, { status: 'betting', timeRemaining: timeLeft, winningNumber: null, history: spinHistory });
             const timerInterval = setInterval(() => { timeLeft--; const state = liveRouletteState.get(guildId); if (state) state.timeRemaining = timeLeft; }, 1000);
 
+            const tableArt = `
+🟢 **0**
+🔴 **1** ┃ ⚫ **2** ┃ 🔴 **3** | *1st 12*
+⚫ **4** ┃ 🔴 **5** ┃ ⚫ **6** |
+🔴 **7** ┃ ⚫ **8** ┃ 🔴 **9** |
+⚫ **10**┃ ⚫ **11**┃ 🔴 **12** |
+⚫ **13**┃ 🔴 **14**┃ ⚫ **15** | *2nd 12*
+🔴 **16**┃ ⚫ **17**┃ 🔴 **18** |
+🔴 **19**┃ ⚫ **20**┃ 🔴 **21** |
+⚫ **22**┃ 🔴 **23**┃ ⚫ **24** |
+🔴 **25**┃ ⚫ **26**┃ 🔴 **27** | *3rd 12*
+⚫ **28**┃ ⚫ **29**┃ 🔴 **30** |
+⚫ **31**┃ 🔴 **32**┃ ⚫ **33** |
+🔴 **34**┃ ⚫ **35**┃ 🔴 **36** |
+*Col1* *Col2* *Col3*`;
+
             const betEmbed = new EmbedBuilder()
                 .setTitle('🎰 LIVE DEALER ROULETTE 🎰')
                 .setColor('#2ecc71')
                 .setDescription(`**Betting is OPEN!** You have **1 Minute** to place your bets.\nUse the quick buttons below or click "Custom Bet"!`)
                 .addFields(
+                    // RESTORED FULL STATS AND PAYOUTS GUIDE!
+                    { name: '🎨 Colors', value: stats.breakdown, inline: true },
+                    { name: '⚖️ Odd / Even', value: stats.oddEven, inline: true },
+                    { name: '📏 Low / High', value: stats.lowHigh, inline: true },
+                    { name: '📦 Dozens', value: stats.dozens, inline: true },
+                    { name: '🏛️ Columns', value: stats.columns, inline: true },
+                    { name: '\u200b', value: '\u200b', inline: true },
                     { name: '🔥 Hot Numbers', value: stats.hot, inline: true },
                     { name: '🧊 Cold Numbers', value: stats.cold, inline: true },
+                    { name: '\u200b', value: '\u200b', inline: true },
                     { name: `📜 Spin History (Last ${Math.min(spinHistory.length, 100)})`, value: stats.historyString, inline: false },
-                    { name: 'Roulette Board', value: `🟢 **0**\n🔴 **1** ┃ ⚫ **2** ┃ 🔴 **3** | *1st 12*\n⚫ **4** ┃ 🔴 **5** ┃ ⚫ **6** |\n🔴 **7** ┃ ⚫ **8** ┃ 🔴 **9** |\n⚫ **10**┃ ⚫ **11**┃ 🔴 **12** |\n⚫ **13**┃ 🔴 **14**┃ ⚫ **15** | *2nd 12*\n🔴 **16**┃ ⚫ **17**┃ 🔴 **18** |\n🔴 **19**┃ ⚫ **20**┃ 🔴 **21** |\n⚫ **22**┃ 🔴 **23**┃ ⚫ **24** |\n🔴 **25**┃ ⚫ **26**┃ 🔴 **27** | *3rd 12*\n⚫ **28**┃ ⚫ **29**┃ 🔴 **30** |\n⚫ **31**┃ 🔴 **32**┃ ⚫ **33** |\n🔴 **34**┃ ⚫ **35**┃ 🔴 **36** |\n*Col1* *Col2* *Col3*`, inline: false }
+                    { name: 'Roulette Board', value: tableArt, inline: false },
+                    { name: '🔴 Red / ⚫ Black', value: 'Payout: **1:1**', inline: true },
+                    { name: '🔵 Even / 🟡 Odd', value: 'Payout: **1:1**', inline: true },
+                    { name: '⬇️ Low(1-18) / ⬆️ High(19-36)', value: 'Payout: **1:1**', inline: true },
+                    { name: '📦 Dozens (1-12, 13-24, 25-36)', value: 'Payout: **2:1**', inline: true },
+                    { name: '🏛️ Columns (col1, col2, col3)', value: 'Payout: **2:1**', inline: true },
+                    { name: '🔢 Specific Number (0-36)', value: 'Payout: **35:1**', inline: true },
+                    { name: '🌟 Advanced Bets Guide', value: 'You can type combinations via Custom Bet!\n`voisins`, `tiers`, `orphelins`\n`nb <num> <dist>` (e.g. `nb 0 2`)\n`split 5,8`\n`corner 1,2,4,5`\n`sixline 1,2,3,4,5,6`', inline: false }
                 )
                 .setFooter({ text: `The Dealer is waiting for bets... • Total Server Spins: ${spinHistory.length}` });
 
@@ -307,7 +338,6 @@ async function runRouletteLoop(channel, client, guildId) {
                     let rawTypeToProcess = '';
 
                     if (i.customId === 'place_custom_bet') {
-                        // Original 2-Input Modal
                         const modal = new ModalBuilder().setCustomId(`bet_custom_${i.id}`).setTitle('Custom Roulette Bet');
                         const typeInput = new TextInputBuilder().setCustomId('bet_type').setLabel("Bet type (e.g. split 5,8, nb 0 2)").setStyle(TextInputStyle.Short).setRequired(true);
                         const amountInput = new TextInputBuilder().setCustomId('bet_amount').setLabel("Chip Amount (e.g. 500)").setStyle(TextInputStyle.Short).setRequired(true);
@@ -316,17 +346,14 @@ async function runRouletteLoop(channel, client, guildId) {
                         await i.showModal(modal);
                         const modalSubmit = await i.awaitModalSubmit({ filter: mi => mi.customId === `bet_custom_${i.id}`, time: 45000 });
                         
-                        // FIX: Instant defer prevents the "Interaction Failed" DB timeout!
                         await modalSubmit.deferReply({ ephemeral: true });
-                        
                         rawTypeToProcess = modalSubmit.fields.getTextInputValue('bet_type').toLowerCase().trim();
                         await processBetLogic(modalSubmit, rawTypeToProcess, parseInt(modalSubmit.fields.getTextInputValue('bet_amount')), i.user);
                     } 
                     else if (i.customId.startsWith('qbet_')) {
-                        // New 1-Input Quick Bet Modal
                         const parts = i.customId.split('_');
                         let betLabel = parts[1];
-                        if (betLabel === 'num') betLabel = parts[2]; // handle specific numbers
+                        if (betLabel === 'num') betLabel = parts[2]; 
                         
                         rawTypeToProcess = betLabel;
 
@@ -337,17 +364,13 @@ async function runRouletteLoop(channel, client, guildId) {
                         await i.showModal(modal);
                         const modalSubmit = await i.awaitModalSubmit({ filter: mi => mi.customId === `bet_quick_${i.id}`, time: 45000 });
                         
-                        // FIX: Instant defer prevents the "Interaction Failed" DB timeout!
                         await modalSubmit.deferReply({ ephemeral: true });
-                        
                         await processBetLogic(modalSubmit, rawTypeToProcess, parseInt(modalSubmit.fields.getTextInputValue('bet_amount')), i.user);
                     }
                 } catch (err) {
-                    // Ignored - usually just means the user closed the modal without typing anything
                 }
             });
 
-            // Shared Bet Processing Engine
             async function processBetLogic(modalSubmit, type, cost, user) {
                 if (isNaN(cost) || cost <= 0) return modalSubmit.editReply({ content: '❌ Invalid chip amount!' });
 
