@@ -11,7 +11,7 @@ export default {
                 .setDescription('Play a song or playlist')
                 .addStringOption(option => 
                     option.setName('query')
-                        .setDescription('Song name or URL')
+                        .setDescription('Song name or URL (YouTube/SoundCloud)')
                         .setRequired(true)
                 )
         )
@@ -39,6 +39,9 @@ export default {
             return interaction.reply({ content: '❌ You must be in a Voice Channel to use music commands!', ephemeral: true });
         }
 
+        // ==========================================
+        //               /MUSIC PLAY
+        // ==========================================
         if (sub === 'play') {
             await interaction.deferReply();
             const query = interaction.options.getString('query');
@@ -63,13 +66,13 @@ export default {
             const permissions = voiceChannel.permissionsFor(workerMember);
             
             if (!permissions.has(PermissionFlagsBits.ViewChannel)) {
-                return interaction.editReply(`❌ My music worker (<@${workerMember.user.id}>) cannot see the voice channel <#${voiceChannel.id}>. Check channel permissions!`);
+                return interaction.editReply(`❌ My music worker (<@${workerMember.user.id}>) cannot see the voice channel <#${voiceChannel.id}>.`);
             }
             if (!permissions.has(PermissionFlagsBits.Connect)) {
                 return interaction.editReply(`❌ My music worker (<@${workerMember.user.id}>) does not have permission to CONNECT to <#${voiceChannel.id}>.`);
             }
             if (voiceChannel.userLimit && voiceChannel.members.size >= voiceChannel.userLimit && !permissions.has(PermissionFlagsBits.Administrator)) {
-                return interaction.editReply(`❌ The voice channel <#${voiceChannel.id}> is full, and my worker cannot bypass the limit!`);
+                return interaction.editReply(`❌ The voice channel <#${voiceChannel.id}> is full!`);
             }
 
             try {
@@ -87,8 +90,7 @@ export default {
 
                     queue.player.on('exception', (data) => {
                         logger.warn(`Lavalink Exception: ${data.exception?.message}`);
-                        // Just stop the current track so playNext() triggers automatically
-                        queue.textChannel?.send(`⚠️ **Stream Blocked:** Could not stream this audio. Skipping to next...`).catch(() => null);
+                        queue.textChannel?.send(`⚠️ **Stream Error:** Could not stream this audio. Skipping to next...`).catch(() => null);
                         queue.player.stopTrack(); 
                     });
 
@@ -104,19 +106,20 @@ export default {
 
             const node = queue.workerObj.shoukaku.options.nodeResolver(queue.workerObj.shoukaku.nodes);
             
-            // 🔥 Use YouTube Music Search (ytmsearch) first, fallback to SoundCloud (scsearch)
-            let searchEngine = query.startsWith('http') ? query : `ytmsearch:${query}`;
+            // 🔥 Because the YouTube plugin is installed, ytsearch: will now bypass the 403 IP block!
+            let searchEngine = query.startsWith('http') ? query : `ytsearch:${query}`;
             let result = await node.rest.resolve(searchEngine);
 
+            // Fallback to SoundCloud just in case
             if (!result || ['empty', 'error', 'NO_MATCHES', 'LOAD_FAILED'].includes(result.loadType)) {
                 if (!query.startsWith('http')) {
-                    logger.warn(`Search failed for "${query}". Falling back to SoundCloud...`);
+                    logger.warn(`YouTube search failed for "${query}". Falling back to SoundCloud...`);
                     result = await node.rest.resolve(`scsearch:${query}`);
                 }
             }
 
             if (!result || ['empty', 'error', 'NO_MATCHES', 'LOAD_FAILED'].includes(result.loadType)) {
-                return interaction.editReply('❌ No results found. *(Note: If you pasted a direct link, try typing the song name instead!)*');
+                return interaction.editReply('❌ No results found. *(Note: If you pasted a direct link, it might be broken. Try typing the song name instead!)*');
             }
 
             let track;
@@ -144,6 +147,9 @@ export default {
             }
         }
 
+        // ==========================================
+        //               /MUSIC QUEUE
+        // ==========================================
         if (sub === 'queue') {
             const queue = musicManager.getQueue(guildId);
             if (!queue.current) return interaction.reply({ content: '❌ There is no music playing right now.', ephemeral: true });
@@ -164,6 +170,9 @@ export default {
             await interaction.reply({ embeds: [embed], ephemeral: true });
         }
 
+        // ==========================================
+        //               /MUSIC SKIP
+        // ==========================================
         if (sub === 'skip') {
             const queue = musicManager.getQueue(guildId);
             if (!queue.current || !queue.player) return interaction.reply({ content: '❌ Nothing is playing to skip!', ephemeral: true });
@@ -172,6 +181,9 @@ export default {
             await interaction.reply('⏭️ **Skipped!**');
         }
 
+        // ==========================================
+        //               /MUSIC STOP
+        // ==========================================
         if (sub === 'stop') {
             const queue = musicManager.getQueue(guildId);
             if (!queue.player) return interaction.reply({ content: '❌ Nothing is playing!', ephemeral: true });
