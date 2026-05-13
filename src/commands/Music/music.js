@@ -105,12 +105,26 @@ export default {
             const node = queue.workerObj.shoukaku.options.nodeResolver(queue.workerObj.shoukaku.nodes);
             const result = await node.rest.resolve(query.startsWith('http') ? query : `ytsearch:${query}`);
 
-            if (!result || result.data.length === 0) {
+            // If nothing is found or Lavalink errors out
+            if (!result || ['empty', 'error', 'NO_MATCHES', 'LOAD_FAILED'].includes(result.loadType)) {
                 return interaction.editReply('❌ No results found for that query.');
             }
 
-            // 4. Add to Queue
-            const track = result.type === 'PLAYLIST' ? result.data.tracks[0] : result.data[0];
+            // 4. Safely extract the track based on Lavalink's dynamic response types
+            let track;
+            if (result.loadType === 'PLAYLIST_LOADED' || result.loadType === 'playlist') {
+                track = result.data.tracks[0];
+            } else if (Array.isArray(result.data)) {
+                track = result.data[0]; // It was a search result (Array)
+            } else {
+                track = result.data; // It was a direct link (Single Object)
+            }
+
+            if (!track || !track.info) {
+                return interaction.editReply('❌ Failed to parse the audio track.');
+            }
+
+            // 5. Add to Queue
             track.requester = interaction.user;
             queue.tracks.push(track);
 
