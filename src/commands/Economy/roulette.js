@@ -2,7 +2,7 @@ import { SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, ButtonBuilder, But
 import { logger } from '../../utils/logger.js';
 import { InteractionHelper } from '../../utils/interactionHelper.js';
 import EconomyService from '../../services/economyService.js';
-import { getEconomyData } from '../../utils/economy.js';
+import { getEconomyData, setEconomyData } from '../../utils/economy.js';
 import { getGuildConfig, updateGuildConfig } from '../../services/guildConfig.js';
 import { db } from '../../utils/database.js';
 
@@ -12,15 +12,14 @@ const WHEEL_ORDER = [0, 32, 15, 19, 4, 21, 2, 25, 17, 34, 6, 27, 13, 36, 11, 30,
 // Global Memory 
 const activeRouletteServers = new Set();
 const globalSpinHistory = new Map();
-const userBetHistory = new Map(); // Tracking up to 50 bets per user!
+const userBetHistory = new Map();
 
+// The dashboard reads this map to sync the UI!
 export const liveRouletteState = new Map(); 
 
 // --- LIVE TABLE ANALYTICS ENGINE ---
-function getTableStats(history) {
-    const data = history.slice(-100); 
-    
-    if (data.length === 0) {
+function getTableStats(data) {
+    if (!data || data.length === 0) {
         return {
             breakdown: "No data yet.", oddEven: "N/A", lowHigh: "N/A", dozens: "N/A", columns: "N/A",
             hot: "N/A", cold: "N/A", historyString: "*No spins recorded yet. The table is fresh!*"
@@ -92,9 +91,12 @@ export async function startPersistentRoulettes(client) {
                     const channel = await client.channels.fetch(channelId);
                     if (channel) {
                         activeRouletteServers.add(guildId);
-                        globalSpinHistory.set(guildId, []);
-                        logger.info(`Starting persistent 24/7 Roulette in guild ${guildId}`);
                         
+                        // LOAD PERSISTENT SPIN HISTORY FROM DB
+                        const savedHistory = config.rouletteSpinHistory || [];
+                        globalSpinHistory.set(guildId, savedHistory);
+                        
+                        logger.info(`Starting persistent 24/7 Roulette in guild ${guildId} with ${savedHistory.length} loaded spins.`);
                         runRouletteLoop(channel, client, guildId);
                     }
                 } catch (e) {
@@ -140,6 +142,16 @@ export default {
         .addSubcommand(sub =>
             sub.setName('history')
             .setDescription('View your personal betting history (up to the last 50 spins)')
+        )
+
+        .addSubcommand(sub =>
+            sub.setName('restart')
+            .setDescription('ADMIN ONLY: Reset the table spin history to 0.')
+        )
+
+        .addSubcommand(sub =>
+            sub.setName('reset')
+            .setDescription('ADMIN ONLY: Wipe the spin history AND all player bet histories.')
         ),
         
     category: 'Economy',
@@ -147,6 +159,37 @@ export default {
     async execute(interaction, config, client) {
         const sub = interaction.options.getSubcommand();
         const guildId = interaction.guildId;
+
+        // ==========================================
+        //         ADMIN: RESTART & RESET COMMANDS
+        // ==========================================
+        if (sub === 'restart' || sub === 'reset') {
+            if (!interaction.member.permissions.has(PermissionFlagsBits.Administrator)) {
+                return interaction.reply({ content: '❌ **Access Denied.** You must be a server Administrator.', ephemeral: true });
+            }
+
+            // Wipe Table Spin History
+            globalSpinHistory.set(guildId, []);
+            await updateGuildConfig(client, guildId, { rouletteSpinHistory: [] });
+            
+            if (sub === 'restart') {
+                return interaction.reply({ content: '✅ **Table Restarted!** The global spin history has been wiped clean.', ephemeral: true });
+            }
+
+            if (sub === 'reset') {
+                // Wipe active player histories in memory and DB
+                for (const [key, _] of userBetHistory.entries()) {
+                    const [gId, uId] = key.split('_');
+                    if (gId === guildId) {
+                        const userData = await getEconomyData(client, guildId, uId);
+                        userData.rouletteHistory = [];
+                        await setEconomyData(client, guildId, uId, userData);
+                        userBetHistory.delete(key); // Remove from memory
+                    }
+                }
+                return interaction.reply({ content: '🔥 **Full Reset Complete!** Table spin history AND all recorded player bet histories have been destroyed.', ephemeral: true });
+            }
+        }
 
         // ==========================================
         //         ADMIN: SET ROULETTE CHANNEL
@@ -161,7 +204,6 @@ export default {
             if (!channel) {
                 await updateGuildConfig(client, guildId, { rouletteChannel: null });
                 activeRouletteServers.delete(guildId);
-                globalSpinHistory.delete(guildId);
                 liveRouletteState.delete(guildId);
                 return interaction.reply({ content: '🛑 **Roulette Disabled.** The dealer will finish their current spin and leave the server.', ephemeral: true });
             }
@@ -178,7 +220,10 @@ export default {
             }
 
             activeRouletteServers.add(guildId);
-            if (!globalSpinHistory.has(guildId)) globalSpinHistory.set(guildId, []);
+            if (!globalSpinHistory.has(guildId)) {
+                const cfg = await getGuildConfig(client, guildId);
+                globalSpinHistory.set(guildId, cfg.rouletteSpinHistory || []);
+            }
 
             await interaction.reply({ content: `✅ **24/7 Roulette Dealer Activated!** The dealer is setting up the table in <#${channel.id}>...`, ephemeral: true });
             runRouletteLoop(channel, client, guildId);
@@ -197,7 +242,7 @@ export default {
             }
 
             const requestedSpins = interaction.options.getInteger('spins');
-            const dataToAnalyze = serverHistory.slice(-requestedSpins);
+            const dataToAnalyze = serverHistory.slice(-requestedSpins); // Accurately slice requested amount
             const actualSpinCount = dataToAnalyze.length;
             const stats = getTableStats(dataToAnalyze);
 
@@ -214,8 +259,7 @@ export default {
                     { name: '\u200B', value: '\u200B', inline: true }, 
                     { name: '🔥 Hot Numbers', value: stats.hot, inline: true },
                     { name: '🧊 Cold Numbers', value: stats.cold, inline: true }
-                )
-                .setFooter({ text: 'Data resets when the bot restarts.' });
+                );
 
             await InteractionHelper.safeEditReply(interaction, { embeds: [embed] });
         }
@@ -225,7 +269,14 @@ export default {
         // ==========================================
         if (sub === 'history') {
             const userHistoryKey = `${guildId}_${interaction.user.id}`;
-            const history = userBetHistory.get(userHistoryKey) || [];
+            let history = userBetHistory.get(userHistoryKey);
+
+            // Lazy-load from DB if not in memory
+            if (!history) {
+                const userData = await getEconomyData(client, guildId, interaction.user.id);
+                history = userData.rouletteHistory || [];
+                userBetHistory.set(userHistoryKey, history);
+            }
 
             if (history.length === 0) {
                 return interaction.reply({ content: '❌ You have no recorded roulette bets in this server yet!', ephemeral: true });
@@ -234,7 +285,7 @@ export default {
             const embed = new EmbedBuilder()
                 .setTitle(`🎰 Roulette Bet History (${interaction.user.username})`)
                 .setColor('#f1c40f')
-                .setFooter({ text: 'Showing up to last 50 bets (Resets on bot restart)' });
+                .setFooter({ text: 'Showing up to last 50 bets' });
 
             let desc = '';
             history.forEach((h, i) => {
@@ -251,7 +302,6 @@ export default {
                 desc += `\`${i+1}.\` [${date}] Bet **$${h.cost.toLocaleString()}** on **${displayType}** | Landed: ${numStr} | ${outcome}\n`;
             });
 
-            // Fallback cap if character limit is exceeded (Discord embed desc limit is 4096)
             if (desc.length > 4000) {
                 desc = desc.substring(0, 4000) + '...\n\n*(Truncated due to Discord character limits)*';
             }
@@ -286,7 +336,9 @@ async function runRouletteLoop(channel, client, guildId) {
 
             let currentBets = [];
             let spinHistory = globalSpinHistory.get(guildId) || [];
-            const stats = getTableStats(spinHistory);
+            
+            // Pass ONLY the last 100 spins to the live board to prevent chat clutter
+            const stats = getTableStats(spinHistory.slice(-100));
 
             let timeLeft = 60;
             liveRouletteState.set(guildId, { status: 'betting', timeRemaining: timeLeft, winningNumber: null, history: spinHistory });
@@ -386,7 +438,6 @@ async function runRouletteLoop(channel, client, guildId) {
                         const baseValid = ['red', 'black', 'even', 'odd', '1-18', '19-36', '1-12', '13-24', '25-36', 'col1', 'col2', 'col3'];
                         const typeNoSpace = type.replace(/\s/g, '');
 
-                        // Parse the bet
                         if (baseValid.includes(typeNoSpace)) {
                             parsedBet = typeNoSpace;
                         } else if (!isNaN(typeNoSpace) && parseInt(typeNoSpace) >= 0 && parseInt(typeNoSpace) <= 36) {
@@ -472,8 +523,10 @@ async function runRouletteLoop(channel, client, guildId) {
             const isEven = winningNumber !== 0 && winningNumber % 2 === 0;
             const isOdd = winningNumber !== 0 && winningNumber % 2 !== 0;
 
+            // Update GLOBAL Memory & Save to DB
             spinHistory.push(winningNumber);
             if (spinHistory.length > 500) spinHistory.shift();
+            await updateGuildConfig(client, guildId, { rouletteSpinHistory: spinHistory });
 
             let colorEmoji = '🟢'; let colorName = 'Green';
             if (isRed) { colorEmoji = '🔴'; colorName = 'Red'; }
@@ -513,9 +566,15 @@ async function runRouletteLoop(channel, client, guildId) {
                     winners.push(`🎉 **${bet.userTag}** won **$${payout.toLocaleString()}** *(Bet: ${bet.type.toUpperCase()})*`);
                 }
 
-                // Log Personal User History
+                // Update USER History (Memory + DB)
                 const userHistoryKey = `${guildId}_${bet.userId}`;
-                const userHist = userBetHistory.get(userHistoryKey) || [];
+                let userHist = userBetHistory.get(userHistoryKey);
+                
+                if (!userHist) {
+                    const uData = await getEconomyData(client, guildId, bet.userId);
+                    userHist = uData.rouletteHistory || [];
+                }
+
                 userHist.unshift({
                     type: bet.type.toUpperCase(),
                     cost: bet.cost,
@@ -524,8 +583,14 @@ async function runRouletteLoop(channel, client, guildId) {
                     winningNumber: winningNumber,
                     timestamp: Date.now()
                 });
+                
                 if (userHist.length > 50) userHist.pop();
                 userBetHistory.set(userHistoryKey, userHist);
+
+                // Save back to DB
+                const saveUData = await getEconomyData(client, guildId, bet.userId);
+                saveUData.rouletteHistory = userHist;
+                await setEconomyData(client, guildId, bet.userId, saveUData);
             }
 
             if (winners.length > 0) resultsText += `🏆 **WINNERS:**\n${winners.join('\n')}`;
