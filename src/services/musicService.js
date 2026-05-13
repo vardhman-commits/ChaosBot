@@ -49,21 +49,35 @@ export class MusicService {
             return;
         }
 
-        // Boot worker bots
+        // We will store promises so we can wait for ALL bots to fully emit 'ready'
+        const loginPromises = [];
+
         for (let i = 0; i < tokens.length; i++) {
             const worker = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildVoiceStates] });
-            try {
-                await worker.login(tokens[i]);
-                this.workerBots.push(worker);
-                logger.info(`🎵 Worker [${i + 1}] Online: ${worker.user.tag}`);
-            } catch (err) {
-                logger.error(`❌ Worker [${i + 1}] Login Failed:`, err.message);
-            }
+            
+            const loginPromise = new Promise((resolve, reject) => {
+                worker.once('ready', () => {
+                    logger.info(`🎵 Worker [${i + 1}] Fully Ready: ${worker.user.tag}`);
+                    this.workerBots.push(worker);
+                    resolve();
+                });
+                
+                worker.login(tokens[i]).catch(err => {
+                    logger.error(`❌ Worker [${i + 1}] Login Failed:`, err.message);
+                    resolve(); // Resolve anyway so one failure doesn't block the whole system
+                });
+            });
+
+            loginPromises.push(loginPromise);
         }
 
+        // Wait for all worker bots to establish their WebSockets with Discord
+        await Promise.all(loginPromises);
+
         if (this.workerBots.length > 0) {
-            // Initialize Lavalink using the first worker bot to route audio data
-            this.shoukaku = new Shoukaku(new Connectors.DiscordJS(this.workerBots[0]), Nodes);
+            // CRITICAL FIX: We must pass the client that is fully ready.
+            // Shoukaku uses the Connectors.DiscordJS wrapper to hook into the raw websocket payload.
+            this.shoukaku = new Shoukaku(new Connectors.DiscordJS(this.mainClient), Nodes);
 
             this.shoukaku.on('error', (_, err) => logger.error('Lavalink Error:', err));
             this.shoukaku.on('ready', (name) => logger.info(`✅ Lavalink Node [${name}] successfully connected!`));
