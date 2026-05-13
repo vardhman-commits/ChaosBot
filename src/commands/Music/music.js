@@ -1,4 +1,4 @@
-import { SlashCommandBuilder, EmbedBuilder } from 'discord.js';
+import { SlashCommandBuilder, EmbedBuilder, PermissionFlagsBits } from 'discord.js';
 import { musicManager } from '../../services/musicService.js';
 import { logger } from '../../utils/logger.js';
 
@@ -46,60 +46,80 @@ export default {
             await interaction.deferReply();
             const query = interaction.options.getString('query');
 
-            // 1. Get the Queue (or create a new one)
             const queue = musicManager.getQueue(guildId);
 
-            // 2. Determine which Worker Bot to use
-            if (!queue.workerClient) {
+            // 1. Assign an available Worker
+            if (!queue.workerObj) {
                 const availableWorker = musicManager.getAvailableWorker(guildId);
                 if (!availableWorker) {
-                    return interaction.editReply('❌ All 5 Music Nodes are currently busy! Please try again later.');
+                    return interaction.editReply('❌ All Music Nodes are busy or not invited to this server! Please try again later.');
                 }
-                queue.workerClient = availableWorker;
+                queue.workerObj = availableWorker;
                 queue.textChannel = interaction.channel;
             } else {
-                // If a worker is already here, ensure the user is in the same VC
-                const currentBotVC = queue.workerClient.guilds.cache.get(guildId).members.me.voice.channelId;
+                const currentBotVC = queue.workerObj.client.guilds.cache.get(guildId).members.me.voice.channelId;
                 if (currentBotVC && currentBotVC !== voiceChannel.id) {
                     return interaction.editReply(`❌ I am already playing music in <#${currentBotVC}>!`);
                 }
             }
 
-            // 3. Connect to the Voice Channel
+            // --- CRITICAL PERMISSION CHECKS ---
+            const workerMember = queue.workerObj.client.guilds.cache.get(guildId).members.me;
+            const permissions = voiceChannel.permissionsFor(workerMember);
+            
+            if (!permissions.has(PermissionFlagsBits.ViewChannel)) {
+                return interaction.editReply(`❌ My music worker (<@${workerMember.user.id}>) cannot see the voice channel <#${voiceChannel.id}>. Check channel permissions!`);
+            }
+            if (!permissions.has(PermissionFlagsBits.Connect)) {
+                return interaction.editReply(`❌ My music worker (<@${workerMember.user.id}>) does not have permission to CONNECT to <#${voiceChannel.id}>.`);
+            }
+            if (voiceChannel.userLimit && voiceChannel.members.size >= voiceChannel.userLimit && !permissions.has(PermissionFlagsBits.Administrator)) {
+                return interaction.editReply(`❌ The voice channel <#${voiceChannel.id}> is full, and my worker cannot bypass the limit!`);
+            }
+            // ----------------------------------
+
+            // 2. Connect to the Voice Channel
             try {
-                queue.player = await musicManager.shoukaku.joinVoiceChannel({
-                    guildId: guildId,
-                    channelId: voiceChannel.id,
-                    shardId: 0 // Default shard
-                });
+                if (!queue.player) {
+                    queue.player = await queue.workerObj.shoukaku.joinVoiceChannel({
+                        guildId: guildId,
+                        channelId: voiceChannel.id,
+                        shardId: workerMember.guild.shardId || 0
+                    });
+
+                    queue.player.on('end', () => {
+                        musicManager.playNext(guildId);
+                    });
+
+                    queue.player.on('closed', () => {
+                        queue.workerObj.shoukaku.leaveVoiceChannel(guildId);
+                        musicManager.queues.delete(guildId);
+                    });
+                }
             } catch (error) {
                 logger.error('Failed to join VC:', error);
                 return interaction.editReply('❌ Failed to connect to the voice channel.');
             }
 
-            // 4. Search Lavalink for the song
-            // We use the primary Shoukaku node to do the searching
-            const node = musicManager.shoukaku.options.nodeResolver(musicManager.shoukaku.nodes);
+            // 3. Search Lavalink for the song
+            const node = queue.workerObj.shoukaku.options.nodeResolver(queue.workerObj.shoukaku.nodes);
             const result = await node.rest.resolve(query.startsWith('http') ? query : `ytsearch:${query}`);
 
             if (!result || result.data.length === 0) {
                 return interaction.editReply('❌ No results found for that query.');
             }
 
-            // 5. Add to Queue
+            // 4. Add to Queue
             const track = result.type === 'PLAYLIST' ? result.data.tracks[0] : result.data[0];
-            
-            // Attach requester info so we know who played it
             track.requester = interaction.user;
-            
             queue.tracks.push(track);
 
             if (!queue.current) {
                 await interaction.editReply(`🎵 **Starting playback:** \`${track.info.title}\``);
-                await musicManager.playNext(guildId); // Start the engine!
+                await musicManager.playNext(guildId); 
             } else {
                 await interaction.editReply(`✅ **Added to queue:** \`${track.info.title}\``);
-                await musicManager.updatePlaybackUI(guildId); // Update the interactive buttons to show new queue size
+                await musicManager.updatePlaybackUI(guildId); 
             }
         }
 
@@ -108,9 +128,7 @@ export default {
         // ==========================================
         if (sub === 'queue') {
             const queue = musicManager.getQueue(guildId);
-            if (!queue.current) {
-                return interaction.reply({ content: '❌ There is no music playing right now.', ephemeral: true });
-            }
+            if (!queue.current) return interaction.reply({ content: '❌ There is no music playing right now.', ephemeral: true });
 
             const embed = new EmbedBuilder()
                 .setTitle('🎶 Server Music Queue')
@@ -120,10 +138,7 @@ export default {
             if (queue.tracks.length > 0) {
                 const upcoming = queue.tracks.slice(0, 10).map((t, i) => `\`${i + 1}.\` ${t.info.title}`).join('\n');
                 embed.addFields({ name: 'Up Next', value: upcoming });
-                
-                if (queue.tracks.length > 10) {
-                    embed.setFooter({ text: `...and ${queue.tracks.length - 10} more tracks.` });
-                }
+                if (queue.tracks.length > 10) embed.setFooter({ text: `...and ${queue.tracks.length - 10} more tracks.` });
             } else {
                 embed.addFields({ name: 'Up Next', value: '*Queue is empty.*' });
             }
@@ -136,11 +151,9 @@ export default {
         // ==========================================
         if (sub === 'skip') {
             const queue = musicManager.getQueue(guildId);
-            if (!queue.current || !queue.player) {
-                return interaction.reply({ content: '❌ Nothing is playing to skip!', ephemeral: true });
-            }
+            if (!queue.current || !queue.player) return interaction.reply({ content: '❌ Nothing is playing to skip!', ephemeral: true });
             
-            queue.player.stopTrack(); // Emitting 'end' to Lavalink automatically triggers playNext()
+            queue.player.stopTrack(); 
             await interaction.reply('⏭️ **Skipped!**');
         }
 
@@ -149,11 +162,9 @@ export default {
         // ==========================================
         if (sub === 'stop') {
             const queue = musicManager.getQueue(guildId);
-            if (!queue.player) {
-                return interaction.reply({ content: '❌ Nothing is playing!', ephemeral: true });
-            }
+            if (!queue.player) return interaction.reply({ content: '❌ Nothing is playing!', ephemeral: true });
 
-            queue.tracks = []; // Wipe the upcoming songs
+            queue.tracks = []; 
             queue.loop = 'OFF';
             queue.player.stopTrack(); 
             
