@@ -11,7 +11,7 @@ export default {
                 .setDescription('Play a song or playlist')
                 .addStringOption(option => 
                     option.setName('query')
-                        .setDescription('Song name or URL (YouTube, Spotify, SoundCloud)')
+                        .setDescription('Song name or URL (Type song name for Spotify bypass)')
                         .setRequired(true)
                 )
         )
@@ -92,12 +92,9 @@ export default {
                         musicManager.playNext(guildId);
                     });
 
-                    // Catch 403 Stream Blocks gracefully
                     queue.player.on('exception', (data) => {
                         logger.warn(`Lavalink Exception: ${data.exception?.message}`);
                         queue.textChannel?.send(`⚠️ **Stream Blocked:** The platform refused to stream this audio. Skipping to next song...`).catch(() => null);
-                        
-                        // Force the player to skip to the next song instead of dying
                         queue.player.stopTrack(); 
                     });
 
@@ -114,20 +111,20 @@ export default {
             // 3. Search Lavalink for the song
             const node = queue.workerObj.shoukaku.options.nodeResolver(queue.workerObj.shoukaku.nodes);
             
-            // 🔥 FORCE SOUNDCLOUD FIRST: This bypasses YouTube's fake-success stream blocks!
-            let searchEngine = query.startsWith('http') ? query : `scsearch:${query}`;
+            // 🔥 THE NEW APPROACH: Spotify Search (spsearch:) bypasses YouTube's 403 IP blocks!
+            let searchEngine = query.startsWith('http') ? query : `spsearch:${query}`;
             let result = await node.rest.resolve(searchEngine);
 
-            // If SoundCloud fails, fallback to YouTube (just in case)
+            // If Spotify fails or the node doesn't support it, fallback to SoundCloud (scsearch:)
             if (!result || ['empty', 'error', 'NO_MATCHES', 'LOAD_FAILED'].includes(result.loadType)) {
                 if (!query.startsWith('http')) {
-                    logger.warn(`SoundCloud failed for "${query}". Trying YouTube...`);
-                    result = await node.rest.resolve(`ytsearch:${query}`);
+                    logger.warn(`Spotify search failed for "${query}". Falling back to SoundCloud...`);
+                    result = await node.rest.resolve(`scsearch:${query}`);
                 }
             }
 
             if (!result || ['empty', 'error', 'NO_MATCHES', 'LOAD_FAILED'].includes(result.loadType)) {
-                return interaction.editReply('❌ No results found. *(Note: If you pasted a YouTube link, Railway is blocking the stream. Type the song name instead!)*');
+                return interaction.editReply('❌ No results found. *(Note: If you pasted a YouTube link, the platform is blocking the bot. Please just type the song name instead!)*');
             }
 
             // 4. Safely extract the track based on Lavalink's dynamic response types
