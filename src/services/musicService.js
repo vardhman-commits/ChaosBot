@@ -48,7 +48,7 @@ export class MusicService {
         for (let i = 0; i < tokens.length; i++) {
             const worker = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildVoiceStates] });
             
-            // CRITICAL FIX: Initialize Shoukaku BEFORE logging in to catch all raw voice events!
+            // Initialize Shoukaku BEFORE logging in to catch all raw voice events!
             const shoukaku = new Shoukaku(new Connectors.DiscordJS(worker), Nodes);
             
             shoukaku.on('error', (_, err) => logger.error(`Lavalink Error (Worker ${i + 1}):`, err));
