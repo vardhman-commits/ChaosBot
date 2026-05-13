@@ -1,4 +1,4 @@
-﻿import 'dotenv/config';
+import 'dotenv/config';
 import { Client, Collection, GatewayIntentBits } from 'discord.js';
 import { REST } from '@discordjs/rest';
 import express from 'express';
@@ -12,18 +12,19 @@ import { logger, startupLog, shutdownLog } from './utils/logger.js';
 import { checkBirthdays } from './services/birthdayService.js';
 import { checkGiveaways } from './services/giveawayService.js';
 import { loadCommands, registerCommands as registerSlashCommands } from './handlers/commandLoader.js';
-import { attachDashboard } from './dashboard.js'; // 👈 Dashboard imported here!
+import { attachDashboard } from './dashboard.js'; 
+import { musicManager } from './services/musicService.js'; // 👈 Music Manager imported here!
 
 class TitanBot extends Client {
   constructor() {
     super({
       intents: [
         GatewayIntentBits.Guilds,                        
-        GatewayIntentBits.GuildMembers,                 
+        GatewayIntentBits.GuildMembers,                
         GatewayIntentBits.GuildMessages,                
         GatewayIntentBits.GuildMessageReactions,        
-        GatewayIntentBits.MessageContent,               
-        GatewayIntentBits.GuildVoiceStates,             
+        GatewayIntentBits.MessageContent,              
+        GatewayIntentBits.GuildVoiceStates,            
         GatewayIntentBits.GuildBans,                    
       ],
     });
@@ -78,6 +79,16 @@ class TitanBot extends Client {
       startupLog('Logging into Discord...');
       await this.login(this.config.bot.token);
       startupLog('Discord login successful');
+
+      // ==========================================
+      //      BOOT UP THE MUSIC WORKER FLEET
+      // ==========================================
+      try {
+        await musicManager.initWorkers(this);
+      } catch (musicError) {
+        logger.error('Failed to initialize Music Manager:', musicError);
+      }
+      // ==========================================
       
       startupLog('Registering slash commands...');
       await this.registerCommands();
@@ -185,7 +196,6 @@ class TitanBot extends Client {
       });
     });
 
-    // 👈 DASHBOARD ATTACHED HERE
     attachDashboard(app, this);
 
     const startServer = (port, attempt = 0) => {
@@ -196,7 +206,7 @@ class TitanBot extends Client {
         startupLog(`✅ Web Server running on ${host}:${port}`);
         startupLog(`Health endpoint: http://localhost:${port}/health`);
         startupLog(`Ready endpoint: http://localhost:${port}/ready`);
-        startupLog(`Admin Dashboard: http://localhost:${port}/admin`); // Added log!
+        startupLog(`Admin Dashboard: http://localhost:${port}/admin`);
       });
 
       server.on('error', (error) => {
@@ -374,4 +384,3 @@ try {
 }
 
 export default TitanBot;
-
