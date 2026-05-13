@@ -87,8 +87,16 @@ export default {
                         shardId: workerMember.guild.shardId || 0
                     });
 
-                    queue.player.on('end', () => {
+                    // FIXED: Tell the player to auto-play ONLY if it wasn't replaced by another song
+                    queue.player.on('end', (data) => {
+                        if (data && data.reason === 'REPLACED') return;
                         musicManager.playNext(guildId);
+                    });
+
+                    // NEW: Catch 403 Stream Blocks and alert the chat!
+                    queue.player.on('exception', (data) => {
+                        logger.warn(`Lavalink Exception: ${data.exception?.message}`);
+                        queue.textChannel?.send(`⚠️ **Stream Blocked:** The platform refused to stream this audio. Skipping...`).catch(() => null);
                     });
 
                     queue.player.on('closed', () => {
@@ -104,19 +112,21 @@ export default {
             // 3. Search Lavalink for the song
             const node = queue.workerObj.shoukaku.options.nodeResolver(queue.workerObj.shoukaku.nodes);
             
-            let result = await node.rest.resolve(query.startsWith('http') ? query : `ytsearch:${query}`);
+            // THE ULTIMATE BYPASS: Force SoundCloud as the primary search engine for text queries!
+            const searchEngine = query.startsWith('http') ? query : `scsearch:${query}`;
+            let result = await node.rest.resolve(searchEngine);
 
-            // THE BYPASS: If YouTube blocks the IP or fails, automatically fallback to SoundCloud!
+            // If SoundCloud fails, fallback to YouTube
             if (!result || ['empty', 'error', 'NO_MATCHES', 'LOAD_FAILED'].includes(result.loadType)) {
                 if (!query.startsWith('http')) {
-                    logger.warn(`Youtube failed for "${query}". Falling back to SoundCloud...`);
-                    result = await node.rest.resolve(`scsearch:${query}`);
+                    logger.warn(`SoundCloud search failed for "${query}". Falling back to YouTube...`);
+                    result = await node.rest.resolve(`ytsearch:${query}`);
                 }
             }
 
             // If it STILL fails after the fallback
             if (!result || ['empty', 'error', 'NO_MATCHES', 'LOAD_FAILED'].includes(result.loadType)) {
-                return interaction.editReply('❌ No results found. *(Note: If you used a YouTube/Spotify link, the platform might be blocking the server. Try typing just the song name instead!)*');
+                return interaction.editReply('❌ No results found. *(Note: If you used a YouTube link, YouTube is actively blocking the server IP. Type the song name instead!)*');
             }
 
             // 4. Safely extract the track based on Lavalink's dynamic response types
